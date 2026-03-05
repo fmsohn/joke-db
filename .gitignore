@@ -1,0 +1,19 @@
+# Database
+jokes.db
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+venv/
+.venv/
+*.egg-info/
+.eggs/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

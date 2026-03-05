@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Joke DB">
+  <title>Joke DB</title>
+  <link rel="icon" type="image/png" href="logo.png?v=4">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="css/style.css?v=8">
+</head>
+<body>
+  <div id="auth-shell" class="auth-shell hidden">
+    <div class="auth-box">
+      <h1>Joke DB</h1>
+      <p class="auth-subtitle">Log in or create an account</p>
+      <p class="auth-criteria">Username: any length, case doesn’t matter. Password: any length (both cannot be blank).</p>
+      <div class="auth-tabs">
+        <button type="button" class="auth-tab active" data-auth="login">Log in</button>
+        <button type="button" class="auth-tab" data-auth="register">Register</button>
+      </div>
+      <form id="auth-form" class="auth-form">
+        <input type="text" id="auth-username" placeholder="Username" autocomplete="username">
+        <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password">
+        <p id="auth-error" class="result error hidden"></p>
+        <button type="submit" id="auth-submit">Log in</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="app-shell">
+  <header class="header">
+    <div class="header-top-row">
+      <img src="logo.png?v=4" alt="Joke DB" class="header-logo header-logo-img">
+      <h1 class="header-title">Joke DB</h1>
+      <span id="user-info" class="user-info"></span>
+    </div>
+    <nav class="tabs">
+      <button type="button" class="tab active" data-tab="ideas">Ideas</button>
+      <button type="button" class="tab" data-tab="jokes">Jokes</button>
+      <button type="button" class="tab" data-tab="sets">Sets</button>
+      <button type="button" class="tab" data-tab="add">Add Joke</button>
+    </nav>
+  </header>
+
+  <main class="main">
+    <!-- Ideas: one line each, convert to joke -->
+    <section id="panel-ideas" class="panel active">
+      <form id="add-idea-form" class="form-box form-inline">
+        <input type="text" id="new-idea-content" placeholder="One-line idea..." maxlength="500">
+        <button type="submit" id="add-idea">Add idea</button>
+      </form>
+      <ul id="idea-list" class="card-list"></ul>
+    </section>
+
+    <!-- Jokes list -->
+    <section id="panel-jokes" class="panel">
+      <div class="toolbar">
+        <select id="filter-status">
+          <option value="">All</option>
+          <option value="draft">Draft</option>
+          <option value="testing">Testing</option>
+          <option value="active">Active</option>
+          <option value="retired">Retired</option>
+        </select>
+        <button type="button" id="refresh-jokes">Refresh</button>
+      </div>
+      <ul id="joke-list" class="card-list"></ul>
+      <div id="joke-detail" class="detail hidden"></div>
+    </section>
+
+    <!-- Sets list -->
+    <section id="panel-sets" class="panel">
+      <ul id="set-list" class="card-list"></ul>
+      <div id="set-detail" class="detail hidden"></div>
+      <div class="form-box">
+        <h3>New set</h3>
+        <input type="text" id="new-set-name" placeholder="Set name">
+        <input type="text" id="new-set-desc" placeholder="Description (optional)">
+        <button type="button" id="create-set">Create set</button>
+      </div>
+    </section>
+
+    <!-- Add joke form -->
+    <section id="panel-add" class="panel">
+      <form id="add-joke-form" class="form-box">
+        <h3>New joke</h3>
+        <input type="text" id="new-joke-title" placeholder="Title *" required>
+        <textarea id="new-joke-premise" placeholder="Body" rows="6"></textarea>
+        <textarea id="new-joke-punchline" placeholder="Act Out" rows="2"></textarea>
+        <select id="new-joke-status">
+          <option value="draft">Draft</option>
+          <option value="testing">Testing</option>
+          <option value="active">Active</option>
+        </select>
+        <button type="submit">Save joke</button>
+      </form>
+      <p id="add-result" class="result hidden"></p>
+    </section>
+  </main>
+  </div>
+
+  <script>
+    (function() {
+      var m = /[?&]api=([^&]+)/.exec(location.search);
+      if (m) {
+        var base = m[1].replace(/\/$/, "");
+        try { sessionStorage.setItem("joke_db_api_base", base); } catch (e) {}
+      }
+    })();
+  </script>
+  <script src="js/app.js?v=8"></script>
+</body>
+</html>
