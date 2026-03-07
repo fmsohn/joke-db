@@ -3,19 +3,60 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <meta name="theme-color" content="#000000">
+  <meta name="theme-color" content="#4169E1">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Joke DB">
-  <title>Joke DB</title>
-  <link rel="icon" type="image/png" href="logo.png?v=4">
+  <meta name="apple-mobile-web-app-title" content="Stagetime">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Stagetime</title>
+  <link rel="icon" type="image/png" href="icons/AppIcon.png">
+  <link rel="apple-touch-icon" href="icons/AppIcon.png">
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="css/style.css?v=8">
+  <link rel="stylesheet" href="css/style.css?v=11">
+  <script>
+    (function() {
+      if (navigator.storage && navigator.storage.persist) {
+        navigator.storage.persist().catch(function() {});
+      }
+      if (typeof navigator.serviceWorker !== "undefined") {
+        navigator.serviceWorker.register("sw.js").catch(function() {});
+      }
+      var installBtn = document.getElementById("install-btn");
+      var installPrompt = null;
+      function hideInstallBtn() {
+        if (installBtn) installBtn.classList.add("hidden");
+      }
+      if (installBtn) {
+        if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) hideInstallBtn();
+        installBtn.addEventListener("click", function() {
+          if (installPrompt) {
+            installPrompt.prompt();
+            installPrompt.userChoice.then(function() { installPrompt = null; hideInstallBtn(); });
+          }
+        });
+      }
+      window.addEventListener("beforeinstallprompt", function(e) {
+        e.preventDefault();
+        installPrompt = e;
+        if (installBtn) installBtn.classList.remove("hidden");
+      });
+      window.addEventListener("appinstalled", function() {
+        installPrompt = null;
+        hideInstallBtn();
+      });
+    })();
+  </script>
 </head>
 <body>
-  <div id="auth-shell" class="auth-shell hidden">
+  <div id="storage-notice" class="storage-notice hidden" role="alert">
+    <p>Open Stagetime to refresh local storage.</p>
+    <button type="button" id="storage-notice-dismiss">OK</button>
+  </div>
+  <div id="auth-shell" class="auth-shell hidden" style="display: none !important;">
     <div class="auth-box">
-      <h1>Joke DB</h1>
+      <h1>Stagetime</h1>
       <p class="auth-subtitle">Log in or create an account</p>
+      <p class="auth-same-device">Use the <strong>same account</strong> on your phone and computer so your jokes and ideas appear everywhere.</p>
       <p class="auth-criteria">Username: any length, case doesn’t matter. Password: any length (both cannot be blank).</p>
       <div class="auth-tabs">
         <button type="button" class="auth-tab active" data-auth="login">Log in</button>
@@ -33,19 +74,41 @@
   <div id="app-shell">
   <header class="header">
     <div class="header-top-row">
-      <img src="logo.png?v=4" alt="Joke DB" class="header-logo header-logo-img">
-      <h1 class="header-title">Joke DB</h1>
       <span id="user-info" class="user-info"></span>
+      <img src="logo.png" alt="Stagetime" class="header-logo header-logo-img">
+      <h1 class="header-title">Stagetime</h1>
     </div>
     <nav class="tabs">
       <button type="button" class="tab active" data-tab="ideas">Ideas</button>
       <button type="button" class="tab" data-tab="jokes">Jokes</button>
       <button type="button" class="tab" data-tab="sets">Sets</button>
       <button type="button" class="tab" data-tab="add">Add Joke</button>
+      <button type="button" class="tab tab-import" data-tab="import">Export / Import</button>
     </nav>
+    <div class="header-below-tabs">
+      <button type="button" id="install-btn" class="install-btn" title="Install Stagetime to use offline">Install app</button>
+      <button type="button" id="fullscreen-btn" class="fullscreen-btn hidden" title="Hide browser bar">Full screen</button>
+    </div>
   </header>
 
   <main class="main">
+    <!-- Export / Import: .txt backup only (app is offline-only) -->
+    <section id="panel-import" class="panel import-panel hidden">
+      <div id="import-export-box" class="form-box import-export-box">
+        <h3>Export to .txt file</h3>
+        <p class="import-description">Download your ideas, jokes, and sets as one .txt file (backup or move to another device).</p>
+        <button type="button" id="export-txt-btn">Export to .txt</button>
+        <p id="export-result" class="result hidden"></p>
+      </div>
+      <div id="import-from-file-box" class="form-box import-from-file-box import-primary">
+        <h3>Import from .txt file</h3>
+        <p class="import-description">Choose a .txt file created by Stagetime to add its ideas, jokes, and sets to this device.</p>
+        <input type="file" id="import-file-input" accept=".txt,text/plain" class="import-file-input">
+        <label for="import-file-input" class="import-file-label">Choose .txt file</label>
+        <p id="import-file-result" class="result hidden"></p>
+      </div>
+    </section>
+
     <!-- Ideas: one line each, convert to joke -->
     <section id="panel-ideas" class="panel active">
       <form id="add-idea-form" class="form-box form-inline">
@@ -109,8 +172,35 @@
         var base = m[1].replace(/\/$/, "");
         try { sessionStorage.setItem("joke_db_api_base", base); } catch (e) {}
       }
+      var storage = /[?&]storage=(\w+)/.exec(location.search);
+      if (storage && storage[1] === "local") {
+        try { localStorage.setItem("joke_db_storage", "local"); } catch (e) {}
+      }
+      var fsBtn = document.getElementById("fullscreen-btn");
+      var doc = document.documentElement;
+      var requestFS = doc.requestFullscreen || doc.webkitRequestFullscreen || doc.webkitRequestFullScreen || doc.mozRequestFullScreen || doc.msRequestFullscreen;
+      var exitFS = document.exitFullscreen || document.webkitExitFullscreen || document.webkitCancelFullScreen || document.mozCancelFullScreen || document.msExitFullscreen;
+      var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ("ontouchstart" in window) || (window.innerWidth <= 768);
+      if (fsBtn && requestFS && isMobile) {
+        fsBtn.classList.remove("hidden");
+        function updateFSBtn() {
+          var inFS = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+          fsBtn.textContent = inFS ? "Exit full screen" : "Full screen";
+        }
+        fsBtn.addEventListener("click", function() {
+          var inFS = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+          if (inFS && exitFS) exitFS.call(document);
+          else if (!inFS && requestFS) requestFS.call(doc);
+        });
+        document.addEventListener("fullscreenchange", updateFSBtn);
+        document.addEventListener("webkitfullscreenchange", updateFSBtn);
+        document.addEventListener("mozfullscreenchange", updateFSBtn);
+        document.addEventListener("MSFullscreenChange", updateFSBtn);
+      }
     })();
   </script>
-  <script src="js/app.js?v=8"></script>
+  <script src="js/local-db.js?v=10"></script>
+  <script src="js/data-layer.js?v=10"></script>
+  <script src="js/app.js?v=10"></script>
 </body>
 </html>

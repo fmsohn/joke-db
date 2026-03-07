@@ -34,7 +34,7 @@ def require_auth():
 @app.after_request
 def after_request(response):
     """Cache control for static; CORS for API when page is served from another origin."""
-    if request.path == "/" or request.path.startswith("/css/") or request.path.startswith("/js/") or request.path.endswith(".html"):
+    if request.path == "/" or request.path == "/sw.js" or request.path.startswith("/css/") or request.path.startswith("/js/") or request.path.endswith(".html"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
     if request.path.startswith("/api/"):
@@ -444,6 +444,15 @@ def api_delete_set(set_id):
 
 
 # --- Serve app ---
+
+@app.route("/sw.js")
+def serve_sw():
+    """Serve service worker with correct type and no-cache so updates apply."""
+    r = send_from_directory(app.static_folder, "sw.js", mimetype="application/javascript")
+    r.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    r.headers["Pragma"] = "no-cache"
+    return r
+
 
 @app.route("/")
 def index():

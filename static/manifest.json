@@ -1,10 +1,31 @@
 {
-  "name": "Joke DB",
-  "short_name": "Joke DB",
-  "description": "Joke management for comedians",
-  "start_url": "/",
+  "name": "Stagetime",
+  "short_name": "Stagetime",
+  "description": "Joke and set management for performers",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
-  "orientation": "portrait"
+  "orientation": "portrait",
+  "background_color": "#4169E1",
+  "theme_color": "#4169E1",
+  "icons": [
+    {
+      "src": "logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
 }
