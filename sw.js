@@ -1,5 +1,5 @@
-// Stagetime PWA Service Worker – works at root or subpath (e.g. GitHub Pages)
-var CACHE_NAME = "stagetime-v2";
+// Stagetime PWA Service Worker – at repo root for GitHub Pages (scope = /)
+var CACHE_NAME = "stagetime-v4";
 var BASE = self.location.pathname.replace(/\/[^/]*$/, "/") || "/";
 
 function fullUrl(path) {
@@ -7,15 +7,15 @@ function fullUrl(path) {
   return self.location.origin + (BASE + p).replace(/\/+/g, "/");
 }
 
+// index.html and data.js at root; assets under static/
 var SHELL = [
   "",
   "index.html",
-  "css/style.css",
-  "js/local-db.js",
-  "js/data-layer.js",
-  "js/app.js",
-  "manifest.json",
-  "logo.png"
+  "data.js",
+  "static/css/style.css",
+  "static/js/app.js",
+  "static/manifest.json",
+  "static/logo.png"
 ].map(function (path) {
   return fullUrl(path);
 });
@@ -39,13 +39,10 @@ self.addEventListener("activate", function (e) {
 });
 
 function isAppRequest(pathname) {
-  if (pathname === "/" || pathname === BASE || pathname === BASE.replace(/\/$/, "")) return true;
-  if (pathname === "/index.html" || pathname === BASE + "index.html") return true;
-  if (pathname.indexOf("/css/") === 0 || pathname.indexOf(BASE + "css/") === 0) return true;
-  if (pathname.indexOf("/js/") === 0 || pathname.indexOf(BASE + "js/") === 0) return true;
-  if (pathname === "/manifest.json" || pathname === BASE + "manifest.json") return true;
-  if (pathname.indexOf("/icons/") === 0 || pathname.indexOf(BASE + "icons/") === 0) return true;
-  if (pathname === "/logo.png" || pathname === BASE + "logo.png") return true;
+  var base = BASE.replace(/\/$/, "");
+  if (pathname === "/" || pathname === BASE || pathname === base) return true;
+  if (pathname === "/index.html" || pathname === base + "/index.html") return true;
+  if (pathname.indexOf(base + "/static/") === 0) return true;
   return false;
 }
 

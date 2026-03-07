@@ -9,10 +9,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
   <title>Stagetime</title>
-  <link rel="icon" type="image/png" href="icons/AppIcon.png">
-  <link rel="apple-touch-icon" href="icons/AppIcon.png">
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="css/style.css?v=11">
+  <link rel="icon" type="image/png" href="static/icons/AppIcon.png">
+  <link rel="apple-touch-icon" href="static/icons/AppIcon.png">
+  <link rel="manifest" href="static/manifest.json">
+  <link rel="stylesheet" href="static/css/style.css?v=11">
   <script>
     (function() {
       if (navigator.storage && navigator.storage.persist) {
@@ -57,7 +57,7 @@
       <h1>Stagetime</h1>
       <p class="auth-subtitle">Log in or create an account</p>
       <p class="auth-same-device">Use the <strong>same account</strong> on your phone and computer so your jokes and ideas appear everywhere.</p>
-      <p class="auth-criteria">Username: any length, case doesn’t matter. Password: any length (both cannot be blank).</p>
+      <p class="auth-criteria">Username: any length, case doesn't matter. Password: any length (both cannot be blank).</p>
       <div class="auth-tabs">
         <button type="button" class="auth-tab active" data-auth="login">Log in</button>
         <button type="button" class="auth-tab" data-auth="register">Register</button>
@@ -75,7 +75,7 @@
   <header class="header">
     <div class="header-top-row">
       <span id="user-info" class="user-info"></span>
-      <img src="logo.png" alt="Stagetime" class="header-logo header-logo-img">
+      <img src="static/logo.png" alt="Stagetime" class="header-logo header-logo-img">
       <h1 class="header-title">Stagetime</h1>
     </div>
     <nav class="tabs">
@@ -199,8 +199,7 @@
       }
     })();
   </script>
-  <script src="js/local-db.js?v=10"></script>
-  <script src="js/data-layer.js?v=10"></script>
-  <script src="js/app.js?v=10"></script>
+  <script src="data.js"></script>
+  <script src="static/js/app.js?v=10"></script>
 </body>
 </html>
