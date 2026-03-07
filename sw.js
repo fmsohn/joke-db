@@ -43,6 +43,7 @@ function isAppRequest(pathname) {
   if (pathname === "/" || pathname === BASE || pathname === base) return true;
   if (pathname === "/index.html" || pathname === base + "/index.html") return true;
   if (pathname.indexOf(base + "/static/") === 0) return true;
+  if (pathname.indexOf(base + "/") === 0) return true;
   return false;
 }
 

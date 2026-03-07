@@ -14,37 +14,8 @@
   <link rel="manifest" href="static/manifest.json">
   <link rel="stylesheet" href="static/css/style.css?v=11">
   <script>
-    (function() {
-      if (navigator.storage && navigator.storage.persist) {
-        navigator.storage.persist().catch(function() {});
-      }
-      if (typeof navigator.serviceWorker !== "undefined") {
-        navigator.serviceWorker.register("sw.js").catch(function() {});
-      }
-      var installBtn = document.getElementById("install-btn");
-      var installPrompt = null;
-      function hideInstallBtn() {
-        if (installBtn) installBtn.classList.add("hidden");
-      }
-      if (installBtn) {
-        if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) hideInstallBtn();
-        installBtn.addEventListener("click", function() {
-          if (installPrompt) {
-            installPrompt.prompt();
-            installPrompt.userChoice.then(function() { installPrompt = null; hideInstallBtn(); });
-          }
-        });
-      }
-      window.addEventListener("beforeinstallprompt", function(e) {
-        e.preventDefault();
-        installPrompt = e;
-        if (installBtn) installBtn.classList.remove("hidden");
-      });
-      window.addEventListener("appinstalled", function() {
-        installPrompt = null;
-        hideInstallBtn();
-      });
-    })();
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function() {});
+    if (typeof navigator.serviceWorker !== "undefined") navigator.serviceWorker.register("sw.js").catch(function() {});
   </script>
 </head>
 <body>
@@ -86,7 +57,7 @@
       <button type="button" class="tab tab-import" data-tab="import">Export / Import</button>
     </nav>
     <div class="header-below-tabs">
-      <button type="button" id="install-btn" class="install-btn" title="Install Stagetime to use offline">Install app</button>
+      <button type="button" id="install-btn" class="install-btn hidden" title="Install Stagetime to use offline">Install app</button>
       <button type="button" id="fullscreen-btn" class="fullscreen-btn hidden" title="Hide browser bar">Full screen</button>
     </div>
   </header>
@@ -201,5 +172,36 @@
   </script>
   <script src="data.js"></script>
   <script src="static/js/app.js?v=10"></script>
+  <script>
+    (function () {
+      let deferredPrompt;
+
+      window.addEventListener("beforeinstallprompt", function (e) {
+        e.preventDefault();
+        deferredPrompt = e;
+        var installBtn = document.getElementById("install-btn");
+        if (installBtn) installBtn.classList.remove("hidden");
+      });
+
+      var installBtn = document.getElementById("install-btn");
+      if (installBtn) {
+        installBtn.addEventListener("click", function () {
+          console.log("install-btn click, deferredPrompt:", deferredPrompt);
+
+          if (!deferredPrompt) {
+            console.error("deferredPrompt is undefined, cannot show prompt.");
+            return;
+          }
+
+          deferredPrompt.prompt();
+
+          deferredPrompt.userChoice.then(function (choiceResult) {
+            console.log("userChoice outcome:", choiceResult ? choiceResult.outcome : choiceResult);
+            deferredPrompt = null;
+          });
+        });
+      }
+    })();
+  </script>
 </body>
 </html>
