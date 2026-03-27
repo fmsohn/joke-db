@@ -47,9 +47,10 @@
   --shadow-card: 0 6px 12px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.35);
   --breakpoint-mobile: 768px;
 
-  /* Layer stack: global nav / slicer above idea detail modal */
+  /* Layer stack: detail modal, then set picker, then slicer / nav */
   --panel-height: 50px;
   --z-modal-container: 9000;
+  --z-set-picker: 10005;
   --z-slicer-stack: 10001;
   --z-nav-pill-stack: 10002;
 }
@@ -193,7 +194,7 @@ body.theme-ut {
 
 /* Overrides workstation.css order: keep nav + slicer above #modal-container (idea detail) */
 html body #modal-container {
-  z-index: var(--z-modal-container, 9000);
+  z-index: 9000;
   margin-top: var(--panel-height, 50px);
 }
 
@@ -204,4 +205,35 @@ html body #nav-command-pill {
 html body .nav-pill-btn {
   position: relative;
   z-index: var(--z-nav-pill-stack, 10002);
+}
+
+/* Set picker (+SET): above #modal-container, below slicer and nav pill */
+#set-picker-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+  z-index: 10005;
+}
+
+#set-picker-modal:not(.hidden) {
+  pointer-events: auto;
+}
+
+#set-picker-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10005;
+  background: rgba(0, 0, 0, 0.8);
+  pointer-events: auto;
+}
+
+#set-picker-modal .workstation-picker-panel {
+  position: relative;
+  z-index: 10005;
+  pointer-events: auto;
+  flex: 0 0 auto;
 }

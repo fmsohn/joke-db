@@ -500,24 +500,194 @@
     });
   }
 
-  /** Collects core backup data from Dexie stores and returns a fresh JSON object. */
-  function exportDatabaseToJson() {
-    return db.transaction("r", db.jokes, db.ideas, db.sets, function () {
+  function sanitizeJokeRow(item) {
+    item = item && typeof item === "object" ? item : {};
+    var def = appConfig.defaultItem;
+    var merged = {};
+    var k;
+    for (k in def) {
+      if (Object.prototype.hasOwnProperty.call(def, k)) {
+        var dv = item[k];
+        merged[k] = dv != null ? dv : def[k];
+      }
+    }
+    var title = item.title != null ? String(item.title) : (merged.title != null ? String(merged.title) : "");
+    title = title != null ? title : "";
+    var topicRaw = item.topic != null ? item.topic : (merged.topic != null ? merged.topic : "Uncategorized");
+    var topic = topicRaw != null ? String(topicRaw) : "Uncategorized";
+    var tags = Array.isArray(item.tags) ? item.tags.slice() : (Array.isArray(merged.tags) ? merged.tags.slice() : []);
+    var ratingRaw = item.rating != null ? item.rating : merged.rating;
+    var ratingNum = ratingRaw != null ? Number(ratingRaw) : 0;
+    var mr = merged.rating != null ? Number(merged.rating) : 0;
+    var rating = ratingNum >= 1 && ratingNum <= 5 ? ratingNum : (mr >= 1 && mr <= 5 ? mr : 0);
+    var content = item.content != null ? String(item.content) : (item.premise != null ? String(item.premise) : (merged.content != null ? String(merged.content) : ""));
+    content = content != null ? content : "";
+    var actOut = item.act_out != null ? String(item.act_out) : (item.punchline != null ? String(item.punchline) : "");
+    var notesMerged = merged.notes != null ? String(merged.notes) : "";
+    var notesField = item.setup_notes != null ? item.setup_notes : (item.notes != null ? item.notes : notesMerged);
+    var setup_notes = notesField != null ? String(notesField) : null;
+    var row = {
+      comedian_id: item.comedian_id != null ? item.comedian_id : COMEDIAN_ID,
+      type: item.type != null ? String(item.type) : "joke",
+      title: title,
+      content: content,
+      act_out: actOut !== "" ? actOut : null,
+      setup_notes: setup_notes,
+      status: item.status != null ? item.status : "draft",
+      topic: topic,
+      tags: tags,
+      rating: rating,
+      created_at: item.created_at != null ? item.created_at : now(),
+      updated_at: item.updated_at != null ? item.updated_at : now(),
+      duration: item.duration != null ? item.duration : null,
+      premise: item.premise != null ? String(item.premise) : content,
+      punchline: item.punchline != null ? String(item.punchline) : actOut
+    };
+    if (item.id != null) row.id = item.id;
+    return row;
+  }
+
+  function sanitizeIdeaRow(item) {
+    item = item && typeof item === "object" ? item : {};
+    var def = appConfig.defaultItem;
+    var merged = {};
+    var k;
+    for (k in def) {
+      if (Object.prototype.hasOwnProperty.call(def, k)) {
+        var dv = item[k];
+        merged[k] = dv != null ? dv : def[k];
+      }
+    }
+    var bodyVal = item.body != null ? item.body : null;
+    var contentVal = item.content != null ? item.content : null;
+    if (bodyVal == null && contentVal != null) {
+      bodyVal = contentVal;
+    }
+    var bodyStr = bodyVal != null ? String(bodyVal) : "";
+    var contentStr = contentVal != null ? String(contentVal) : "";
+    var mainBody = bodyStr !== "" ? bodyStr : contentStr;
+    var contentFinal = mainBody !== "" ? mainBody : (merged.content != null ? String(merged.content) : "");
+    var title = item.title != null ? String(item.title) : (merged.title != null ? String(merged.title) : "");
+    title = title != null ? title : "";
+    var topicRaw = item.topic != null ? item.topic : (merged.topic != null ? merged.topic : "Uncategorized");
+    var topic = topicRaw != null ? String(topicRaw) : "Uncategorized";
+    var tags = Array.isArray(item.tags) ? item.tags.slice() : (Array.isArray(merged.tags) ? merged.tags.slice() : []);
+    var notes = item.notes != null ? String(item.notes) : (merged.notes != null ? String(merged.notes) : "");
+    contentFinal = contentFinal != null ? String(contentFinal) : "";
+    var row = {
+      comedian_id: item.comedian_id != null ? item.comedian_id : COMEDIAN_ID,
+      type: item.type != null ? String(item.type) : "idea",
+      title: title,
+      content: contentFinal,
+      topic: topic,
+      tags: tags,
+      notes: notes,
+      created_at: item.created_at != null ? item.created_at : now()
+    };
+    if (item.id != null) row.id = item.id;
+    return row;
+  }
+
+  function sanitizeSetItemRow(item) {
+    item = item && typeof item === "object" ? item : {};
+    var setId = parseInt(item.set_id, 10);
+    var itemId = parseInt(item.item_id, 10);
+    var pos = item.position != null ? parseInt(item.position, 10) : 0;
+    var itemType = item.item_type === "idea" ? "idea" : "joke";
+    if (!Number.isFinite(setId) || !Number.isFinite(itemId)) return null;
+    var row = {
+      set_id: setId,
+      item_type: itemType,
+      item_id: itemId,
+      position: Number.isFinite(pos) ? pos : 0
+    };
+    if (item.id != null) {
+      var lid = parseInt(item.id, 10);
+      if (Number.isFinite(lid)) row.id = lid;
+    }
+    return row;
+  }
+
+  function sanitizeSetRow(item) {
+    item = item && typeof item === "object" ? item : {};
+    var def = appConfig.defaultItem;
+    var merged = {};
+    var k;
+    for (k in def) {
+      if (Object.prototype.hasOwnProperty.call(def, k)) {
+        var dv = item[k];
+        merged[k] = dv != null ? dv : def[k];
+      }
+    }
+    var name = item.name != null ? String(item.name) : (merged.title != null ? String(merged.title) : "");
+    var description = item.description != null ? String(item.description) : null;
+    var row = {
+      comedian_id: item.comedian_id != null ? item.comedian_id : COMEDIAN_ID,
+      name: name,
+      description: description,
+      created_at: item.created_at != null ? item.created_at : now(),
+      updated_at: item.updated_at != null ? item.updated_at : now()
+    };
+    if (item.id != null) row.id = item.id;
+    return row;
+  }
+
+  window.exportDatabase = function () {
+    var appVersion = typeof window.STAGETIME_APP_VERSION === "string" ? window.STAGETIME_APP_VERSION : "2.3.1";
+    return db.transaction("r", db.jokes, db.ideas, db.sets, db.set_items, function () {
       return Promise.all([
         db.jokes.toArray(),
         db.ideas.toArray(),
-        db.sets.toArray()
+        db.sets.toArray(),
+        db.set_items.toArray()
       ]).then(function (res) {
+        var jokes = res[0] || [];
+        var ideas = res[1] || [];
+        var sets = res[2] || [];
+        var set_items = res[3] || [];
         return {
-          jokes: res[0] || [],
-          ideas: res[1] || [],
-          sets: res[2] || []
+          appVersion: appVersion,
+          timestamp: new Date().toISOString(),
+          jokes: jokes,
+          ideas: ideas,
+          sets: sets,
+          set_items: set_items
         };
       });
+    }).then(function (bundle) {
+      var payload = {
+        appVersion: bundle.appVersion,
+        timestamp: bundle.timestamp,
+        jokes: bundle.jokes,
+        ideas: bundle.ideas,
+        sets: bundle.sets,
+        set_items: bundle.set_items
+      };
+      var json = JSON.stringify(payload, null, 2);
+      var blob = new Blob([json], { type: "application/json" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      var datePart = new Date().toISOString().slice(0, 10);
+      a.download = "stagetime_backup_" + datePart + ".json";
+      a.classList.add("hidden");
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      if (typeof window.showToast === "function") {
+        window.showToast("Backup file saved.", "#000");
+      }
+      return bundle;
+    }).catch(function (err) {
+      if (typeof window.showToast === "function") {
+        window.showToast(err && err.message ? err.message : "Export failed.", "#8b0000");
+      }
+      return Promise.reject(err);
     });
-  }
+  };
 
-  function importStagetimeBackup(file) {
+  window.importDatabase = function (file) {
     if (!file) return Promise.reject(new Error("No backup file selected."));
     return new Promise(function (resolve, reject) {
       var reader = new FileReader();
@@ -525,38 +695,73 @@
         try {
           var text = typeof reader.result === "string" ? reader.result : "";
           var data = JSON.parse(text);
-          if (!data || data.version !== 1) {
-            throw new Error("Incompatible backup version.");
+          if (!data || typeof data !== "object") {
+            var invalidObjErr = new Error("Invalid backup: expected a JSON object.");
+            if (typeof window.showToast === "function") {
+              window.showToast(invalidObjErr.message, "#8b0000");
+            }
+            reject(invalidObjErr);
+            return;
           }
-          clearAll().then(function () {
-            return db.transaction("rw", db.jokes, db.ideas, db.sets, db.set_items, db.config, function () {
-              return Promise.resolve()
-                .then(function () { return db.jokes.bulkAdd(data.jokes || []); })
-                .then(function () { return db.ideas.bulkAdd(data.ideas || []); })
-                .then(function () { return db.sets.bulkAdd(data.sets || []); })
-                .then(function () { return db.set_items.bulkAdd(data.set_items || []); })
-                .then(function () {
-                  if (data.config) {
-                    return (data.config || []).reduce(function (p, c) {
-                      return p.then(function () { return db.config.put(c); });
-                    }, Promise.resolve());
-                  }
-                  return Promise.resolve();
-                });
-            });
-          }).then(function () {
-            resolve(data);
-          }).catch(function (err) {
+          var jokesRaw = Array.isArray(data.jokes) ? data.jokes : [];
+          var ideasRaw = Array.isArray(data.ideas) ? data.ideas : [];
+          var setsRaw = Array.isArray(data.sets) ? data.sets : [];
+          var payload = data.payload && typeof data.payload === "object" ? data.payload : null;
+          var setItemsRaw = [];
+          if (payload && Array.isArray(payload.set_items)) {
+            setItemsRaw = payload.set_items;
+          } else if (Array.isArray(data.set_items)) {
+            setItemsRaw = data.set_items;
+          }
+          var jokes = jokesRaw.map(sanitizeJokeRow);
+          var ideas = ideasRaw.map(sanitizeIdeaRow);
+          var sets = setsRaw.map(sanitizeSetRow);
+          var setItems = setItemsRaw.map(sanitizeSetItemRow).filter(function (row) { return row != null; });
+          db.transaction("rw", db.jokes, db.ideas, db.sets, db.set_items, function () {
+            return db.set_items.clear()
+              .then(function () { return db.jokes.clear(); })
+              .then(function () { return db.ideas.clear(); })
+              .then(function () { return db.sets.clear(); })
+              .then(function () {
+                if (jokes.length === 0) return;
+                return db.jokes.bulkAdd(jokes);
+              })
+              .then(function () {
+                if (ideas.length === 0) return;
+                return db.ideas.bulkAdd(ideas);
+              })
+              .then(function () {
+                if (sets.length === 0) return;
+                return db.sets.bulkAdd(sets);
+              })
+              .then(function () {
+                if (setItems.length === 0) return;
+                return db.set_items.bulkAdd(setItems);
+              });
+          }).then(function () { resolve(); }).catch(function (err) {
+            if (typeof window.showToast === "function") {
+              window.showToast(err && err.message ? err.message : "Import failed.", "#8b0000");
+            }
             reject(err);
           });
         } catch (err) {
-          reject(err);
+          var caught = err instanceof Error ? err : new Error(String(err));
+          if (typeof window.showToast === "function") {
+            window.showToast(caught.message ? caught.message : "Import failed.", "#8b0000");
+          }
+          reject(caught);
         }
       };
-      reader.onerror = function () { reject(new Error("Could not read file.")); };
+      reader.onerror = function () {
+        var readErr = new Error("Could not read file.");
+        if (typeof window.showToast === "function") {
+          window.showToast(readErr.message, "#8b0000");
+        }
+        reject(readErr);
+      };
       reader.readAsText(file, "UTF-8");
     });
-  }
+  };
 
   window.dataLayer = {
     appConfig: appConfig,
@@ -600,7 +805,34 @@
     getAllTags: getAllTags,
 
     clearAll: clearAll,
-    exportDatabaseToJson: exportDatabaseToJson,
-    importStagetimeBackup: importStagetimeBackup
+    exportDatabase: function () { return window.exportDatabase(); },
+    importDatabase: function (file) { return window.importDatabase(file); }
   };
+
+  function initBackupFileInput() {
+    var input = document.getElementById("import-input");
+    if (!input || input.dataset.stagetimeBackupBound === "1") return;
+    input.dataset.stagetimeBackupBound = "1";
+    input.addEventListener("change", function () {
+      var file = input.files && input.files[0];
+      input.value = "";
+      if (!file) return;
+      window.importDatabase(file)
+        .then(function () {
+          window.location.reload();
+        })
+        .catch(function () {});
+    });
+  }
+
+  window.triggerImport = function () {
+    var el = document.getElementById("import-input");
+    if (el) el.click();
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initBackupFileInput);
+  } else {
+    initBackupFileInput();
+  }
 })();

@@ -410,6 +410,14 @@ input#modal-idea-title.idea-detail-title:focus {
     box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.8);
 }
 
+#panel-settings .backup-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    margin-top: 12px;
+}
+
 #app-shell .quick-add-row {
     display: flex;
     gap: 5px; 
@@ -421,7 +429,6 @@ input#modal-idea-title.idea-detail-title:focus {
 #create-idea-btn,
 #create-joke-btn,
 #create-set-btn,
-#export-txt-btn,
 #app-shell .quick-add-row input,
 #app-shell .quick-add-row button,
 #app-shell .slab-button {
@@ -436,7 +443,6 @@ input#modal-idea-title.idea-detail-title:focus {
 #create-joke-btn,
 #create-set-btn,
 #app-shell .quick-add-row button,
-#export-txt-btn,
 #app-shell .slab-button {
     background-color: var(--accent-color);
     color: #000;
@@ -463,7 +469,6 @@ input#modal-idea-title.idea-detail-title:focus {
 #create-joke-btn:active,
 #create-set-btn:active,
 #app-shell .quick-add-row button:active,
-#export-txt-btn:active,
 #app-shell .slab-button:active {
     transform: translate(2px, 2px);
     box-shadow: 0px 0px 0px transparent;
@@ -675,15 +680,11 @@ body #modal-container .modal-content {
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 1000;
+    z-index: var(--z-set-picker, 10000);
 }
 
 .workstation-picker-panel {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 10000;
+    position: relative;
     width: min(92vw, 460px);
     background: var(--panel-bg);
     border: 2px solid var(--accent-color);

@@ -2804,33 +2804,48 @@
   }
 
   function closeSetPickerModal() {
-    var m = document.getElementById("modal-set-picker-3d");
-    if (m) m.classList.add("hidden");
+    var m = document.getElementById("set-picker-modal");
+    if (m) {
+      m.classList.add("hidden");
+      m.style.removeProperty("display");
+    }
   }
 
   function ensureSetPickerModal() {
-    var el = document.getElementById("modal-set-picker-3d");
-    if (el) return el;
-    el = document.createElement("div");
-    el.id = "modal-set-picker-3d";
-    el.className = "modal-overlay hidden";
-    el.setAttribute("role", "dialog");
-    el.setAttribute("aria-modal", "true");
-    el.setAttribute("aria-label", "Select a set");
-    el.innerHTML =
-      "<div class=\"workstation-card workstation-picker-panel\">" +
-      "<h3 class=\"workstation-picker-title\">Select a Set</h3>" +
-      "<div id=\"set-options-list\" class=\"set-options-list\"></div>" +
-      "<button type=\"button\" id=\"set-picker-close-btn\" class=\"btn-primary btn-lift set-picker-close\">Close</button>" +
-      "</div>";
-    document.body.appendChild(el);
-    el.querySelector("#set-picker-close-btn").addEventListener("click", function (e) {
-      e.preventDefault();
-      closeSetPickerModal();
-    });
-    el.addEventListener("click", function (e) {
-      if (e.target === el) closeSetPickerModal();
-    });
+    var el = document.getElementById("set-picker-modal");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "set-picker-modal";
+      el.className = "hidden";
+      el.setAttribute("role", "dialog");
+      el.setAttribute("aria-modal", "true");
+      el.setAttribute("aria-label", "Select a set");
+      el.innerHTML =
+        "<div id=\"set-picker-overlay\" aria-hidden=\"true\"></div>" +
+        "<div class=\"workstation-card workstation-picker-panel\">" +
+        "<h3 class=\"workstation-picker-title\">Select a Set</h3>" +
+        "<div id=\"set-options-list\" class=\"set-options-list\"></div>" +
+        "<button type=\"button\" id=\"set-picker-close-btn\" class=\"btn-primary btn-lift set-picker-close\">Close</button>" +
+        "</div>";
+      document.body.appendChild(el);
+    }
+    if (!el.dataset.setPickerWired) {
+      el.dataset.setPickerWired = "1";
+      var closeBtn = el.querySelector("#set-picker-close-btn");
+      var overlay = document.getElementById("set-picker-overlay");
+      if (closeBtn) {
+        closeBtn.addEventListener("click", function (e) {
+          e.preventDefault();
+          closeSetPickerModal();
+        });
+      }
+      if (overlay) {
+        overlay.addEventListener("click", function (e) {
+          e.preventDefault();
+          closeSetPickerModal();
+        });
+      }
+    }
     return el;
   }
 
@@ -2839,13 +2854,19 @@
     if (isNaN(iid)) return;
     var typeNorm = itemType === "joke" ? "joke" : "idea";
     var modal = ensureSetPickerModal();
+    if (!modal) return;
+    var mc = document.getElementById("modal-container");
+    if (mc) {
+      mc.style.removeProperty("z-index");
+      mc.style.removeProperty("Z-index");
+    }
     var listEl = modal.querySelector("#set-options-list");
     if (!listEl) return;
     modal.dataset.pickerItemId = String(iid);
     modal.dataset.pickerItemType = typeNorm;
-    listEl.innerHTML = "<p class=\"meta set-picker-loading\">Loading sets…</p>";
+    listEl.innerHTML = "<p class=\"meta set-picker-loading\">Loading sets.</p>";
     modal.classList.remove("hidden");
-    modal.style.display = "flex";
+    modal.style.removeProperty("display");
     var listSetsP = dataLayer && dataLayer.listSets ? dataLayer.listSets() : Promise.resolve([]);
     listSetsP.then(function (sets) {
       listEl.innerHTML = "";
@@ -3244,166 +3265,6 @@
     });
   }
 
-  function initImportPanel() {
-    if (!dataLayer) return;
-    var exportBtn = document.getElementById("export-txt-btn");
-    var exportResult = document.getElementById("export-result");
-    var importFileInput = document.getElementById("import-file-input");
-    var importFileResult = document.getElementById("import-file-result");
-
-    function showExportResult(msg, isError) {
-      if (!exportResult) return;
-      exportResult.textContent = msg;
-      exportResult.className = "result " + (isError ? "error" : "success");
-      exportResult.classList.remove("hidden");
-    }
-    function showImportFileResult(msg, isError) {
-      if (!importFileResult) return;
-      importFileResult.textContent = msg;
-      importFileResult.className = "result " + (isError ? "error" : "success");
-      importFileResult.classList.remove("hidden");
-    }
-
-    function exportBackup() {
-      if (!dataLayer || typeof dataLayer.exportDatabaseToJson !== "function") {
-        return Promise.reject(new Error("Export not available"));
-      }
-      return dataLayer.exportDatabaseToJson().then(function (obj) {
-        var payload = {
-          jokes: Array.isArray(obj && obj.jokes) ? obj.jokes : [],
-          ideas: Array.isArray(obj && obj.ideas) ? obj.ideas : [],
-          sets: Array.isArray(obj && obj.sets) ? obj.sets : []
-        };
-        var json = JSON.stringify(payload, null, 2);
-        var blob = new Blob([json], { type: "application/json" });
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement("a");
-        a.href = url;
-        var datePart = new Date().toISOString().slice(0, 10);
-        a.download = "stagetime_backup_" + datePart + ".json";
-        a.classList.add("hidden");
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      });
-    }
-
-    function normalizeExportPayload(obj) {
-      if (!obj || typeof obj !== "object") return null;
-      if (!Array.isArray(obj.jokes) || !Array.isArray(obj.ideas) || !Array.isArray(obj.sets)) return null;
-      return {
-        version: obj.version || 1,
-        exportDate: obj.exportDate || null,
-        jokes: obj.jokes || [],
-        ideas: obj.ideas || [],
-        sets: obj.sets || [],
-        set_items: Array.isArray(obj.set_items) ? obj.set_items : [],
-        set_jokes: Array.isArray(obj.set_jokes) ? obj.set_jokes : [],
-        config: Array.isArray(obj.config) ? obj.config : []
-      };
-    }
-
-    function importDatabaseFromJsonExport(obj) {
-      var payload = normalizeExportPayload(obj);
-      if (!payload) return Promise.reject(new Error("Not a valid StageTime .json export."));
-      var dexieDb = window.db;
-      if (!dexieDb || !dexieDb.jokes || !dexieDb.ideas || !dexieDb.sets) {
-        return Promise.reject(new Error("Import not available."));
-      }
-      function toStr(v) { return v == null ? "" : String(v); }
-
-      var jokeRows = (payload.jokes || []).map(function (j) {
-        var row = Object.assign({}, j || {});
-        var premise = toStr(row.premise).trim();
-        var content = toStr(row.content).trim();
-        if (!premise && content) premise = content;
-        row.premise = premise;
-        if (!row.content && premise) row.content = premise;
-        return row;
-      });
-
-      var ideaRows = (payload.ideas || []).map(function (it) {
-        var row = Object.assign({}, it || {});
-        var content = toStr(row.content).trim();
-        if (!content) {
-          content = toStr(row.text).trim() || toStr(row.premise).trim();
-        }
-        row.content = content;
-        return row;
-      });
-
-      var setRows = (payload.sets || []).map(function (s) {
-        return Object.assign({}, s || {});
-      });
-
-      return dexieDb.transaction("rw", dexieDb.jokes, dexieDb.ideas, dexieDb.sets, function () {
-        return Promise.resolve()
-          .then(function () {
-            if (!jokeRows.length) return;
-            return dexieDb.jokes.bulkPut(jokeRows);
-          })
-          .then(function () {
-            if (!ideaRows.length) return;
-            return dexieDb.ideas.bulkPut(ideaRows);
-          })
-          .then(function () {
-            if (!setRows.length) return;
-            return dexieDb.sets.bulkPut(setRows);
-          });
-      })
-        .then(function () {
-          fillDatalists();
-          loadIdeas();
-          loadJokes();
-          loadSets();
-          showToast("Imported " + jokeRows.length + " Jokes, " + ideaRows.length + " Ideas, " + setRows.length + " Sets");
-        });
-    }
-
-    if (exportBtn) {
-      exportBtn.addEventListener("click", function () {
-        showExportResult("Exporting…", false);
-        exportBackup()
-          .then(function () {
-            showExportResult("Exported. File saved.", false);
-          })
-          .catch(function (err) {
-            showExportResult(err && err.message ? err.message : "Export failed.", true);
-          });
-      });
-    }
-
-    if (importFileInput) {
-      importFileInput.addEventListener("change", function () {
-        var file = importFileInput.files && importFileInput.files[0];
-        importFileInput.value = "";
-        if (!file) return;
-        showImportFileResult("Importing…", false);
-        var reader = new FileReader();
-        reader.onload = function () {
-          var text = typeof reader.result === "string" ? reader.result : "";
-          var obj;
-          try {
-            obj = JSON.parse(text);
-          } catch (e) {
-            showImportFileResult("Not a valid StageTime .json file.", true);
-            return;
-          }
-          importDatabaseFromJsonExport(obj)
-            .then(function () {
-              showImportFileResult("Import done. Ideas, jokes, and sets restored.", false);
-            })
-            .catch(function (err) {
-              showImportFileResult(err && err.message ? err.message : "Import failed.", true);
-            });
-        };
-        reader.onerror = function () { showImportFileResult("Could not read file.", true); };
-        reader.readAsText(file, "UTF-8");
-      });
-    }
-  }
-
   function initUpdateCheck() {
     var updateBtn = document.getElementById("update-btn");
     if (!updateBtn || !navigator.serviceWorker) return;
@@ -3438,10 +3299,21 @@
     var appShell = document.getElementById("app-container");
     if (appShell) appShell.classList.remove("hidden");
     window.addEventListener("stagetime-401", showAuthShell);
+    var navPillReady = document.getElementById("nav-command-pill");
+    if (navPillReady) navPillReady.classList.remove("nav-active");
+    var setsPanelReady = document.getElementById("panel-sets");
+    if (setsPanelReady) {
+      setsPanelReady.style.display = "none";
+      setsPanelReady.classList.remove("active");
+      setsPanelReady.classList.add("hidden");
+    }
     initApp();
-    initImportPanel();
     initUpdateCheck();
-    closeModal();
+    loadJokes();
+    setTimeout(function () {
+      closeModal();
+      if (setsPanelReady) setsPanelReady.style.display = "";
+    }, 50);
   }
 
   function saveIdea(id) {
@@ -3568,43 +3440,6 @@
       }
     });
   }
- // ... your existing code ...
-
-// 1. THE ENGINE (Pre-emptive Strike version)
-function runWhenReady() {
-  console.log("Stagetime: Engine Started.");
-
-  document.getElementById("nav-command-pill")?.classList.remove("nav-active");
-
-  // Immediately hide the sets panel from the JS side to stop the flash
-  var setsPanel = document.getElementById('panel-sets');
-  if (setsPanel) {
-    setsPanel.style.display = 'none';
-    setsPanel.classList.remove('active');
-    setsPanel.classList.add('hidden');
-  }
-  
-  // Run all standard setup
-  if (typeof initApp === 'function') initApp();
-  if (typeof initImportPanel === 'function') initImportPanel();
-  if (typeof initUpdateCheck === 'function') initUpdateCheck();
-  if (typeof loadJokes === 'function') loadJokes();
-
-  // The Final Lockdown: Wait 50ms and force the Hub to show
-  setTimeout(function() {
-    closeModal(); 
-    // Restore the display style so the panel works when you click it later
-    if (setsPanel) setsPanel.style.display = '';
-    console.log("Stagetime: Hub Secured.");
-  }, 50);
-}
-
-// 2. THE IGNITION
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', runWhenReady);
-} else {
-  runWhenReady();
-}
 
   function handleRibbonAction(e) {
     var actionEl = e.target && e.target.closest ? e.target.closest("[data-action]") : null;
@@ -3722,4 +3557,9 @@ if (document.readyState === 'loading') {
   window.startStagetime = startStagetimeMode;
   window.isEditingSetOrder = isEditingSetOrder;
 
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", runWhenReady);
+  } else {
+    runWhenReady();
+  }
 })(); // <--- THIS MUST BE THE ABSOLUTE LAST LINE
