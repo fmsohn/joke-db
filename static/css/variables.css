@@ -46,6 +46,12 @@
   --radius: 12px;
   --shadow-card: 0 6px 12px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.35);
   --breakpoint-mobile: 768px;
+
+  /* Layer stack: global nav / slicer above idea detail modal */
+  --panel-height: 50px;
+  --z-modal-container: 9000;
+  --z-slicer-stack: 10001;
+  --z-nav-pill-stack: 10002;
 }
 
 /* FSU: matches body.fsu / body.theme-fsu (see updateAppTheme in app.js) */
@@ -112,7 +118,7 @@ body.theme-ut {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
-  z-index: 999;
+  z-index: var(--z-slicer-stack, 10001);
 }
 
 #slicer-overlay.is-open {
@@ -126,7 +132,7 @@ body.theme-ut {
   right: -300px;
   width: 300px;
   height: 100%;
-  z-index: 1000;
+  z-index: var(--z-slicer-stack, 10001);
   background: var(--bg-panel);
   border-left: 2px solid var(--accent-color);
   box-shadow: -10px 0 28px rgba(0, 0, 0, 0.55);
@@ -183,4 +189,19 @@ body.theme-ut {
 
 .slicer-option input[type="checkbox"] {
   accent-color: var(--accent-color);
+}
+
+/* Overrides workstation.css order: keep nav + slicer above #modal-container (idea detail) */
+html body #modal-container {
+  z-index: var(--z-modal-container, 9000);
+  margin-top: var(--panel-height, 50px);
+}
+
+html body #nav-command-pill {
+  z-index: var(--z-nav-pill-stack, 10002);
+}
+
+html body .nav-pill-btn {
+  position: relative;
+  z-index: var(--z-nav-pill-stack, 10002);
 }

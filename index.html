@@ -50,12 +50,14 @@
           <h2 class="panel-title">Ideas</h2>
         </div>
         <div id="ideas-workstation" class="panel-body">
-          <input type="text" id="idea-search-input" placeholder="Search ideas..." class="search-bar">
-          <div id="quick-add-row" class="quick-add-row">
-            <input type="text" id="new-idea-title-input" placeholder="Quick idea..." maxlength="500">
-            <button type="button" id="create-idea-btn" class="slab-button">Add</button>
+          <div id="panel-ideas-list">
+            <input type="text" id="idea-search-input" placeholder="Search ideas..." class="search-bar">
+            <div id="quick-add-row" class="quick-add-row">
+              <input type="text" id="new-idea-title-input" placeholder="Quick idea..." maxlength="500">
+              <button type="button" id="create-idea-btn" class="slab-button">Add</button>
+            </div>
+            <ul id="idea-list"></ul>
           </div>
-          <ul id="idea-list"></ul>
           <div id="idea-detail" class="hidden"></div>
         </div>
       </section>
@@ -68,21 +70,23 @@
           <input type="text" id="joke-edit-title" class="panel-title jokes-panel-title-input hidden" maxlength="500" autocomplete="off" aria-label="Joke title">
         </div>
         <div class="panel-body">
-          <div id="ws-joke-input" class="quick-add-row">
-            <input type="text" id="new-joke-title-input" placeholder="Quick joke title..." maxlength="200">
-            <button type="button" id="create-joke-btn" class="slab-button">Add</button>
-          </div>
-          <div id="ws-jokes-list-header">
-            <div id="jokes-toolbar">
-              <select id="joke-filter-status" class="workstation-select">
-                <option value="">All Statuses</option>
-                <option value="draft">Draft</option>
-                <option value="active">Active</option>
-                <option value="retired">Retired</option>
-              </select>
+          <div id="panel-jokes-list">
+            <div id="ws-joke-input" class="quick-add-row">
+              <input type="text" id="new-joke-title-input" placeholder="Quick joke title..." maxlength="200">
+              <button type="button" id="create-joke-btn" class="slab-button">Add</button>
             </div>
+            <div id="ws-jokes-list-header">
+              <div id="jokes-toolbar">
+                <select id="joke-filter-status" class="workstation-select">
+                  <option value="">All Statuses</option>
+                  <option value="draft">Draft</option>
+                  <option value="active">Active</option>
+                  <option value="retired">Retired</option>
+                </select>
+              </div>
+            </div>
+            <ul id="joke-list"></ul>
           </div>
-          <ul id="joke-list"></ul>
           <div id="jokes-detail-container" class="hidden"></div>
         </div>
       </section>
@@ -94,11 +98,13 @@
           <h2 class="panel-title">Sets</h2>
         </div>
         <div class="panel-body">
-          <div class="quick-add-row">
-            <input type="text" id="new-set-title-input" placeholder="New set title..." maxlength="100">
-            <button type="button" id="create-set-btn" class="slab-button">Create</button>
+          <div id="panel-sets-list">
+            <div id="sets-new-form" class="quick-add-row">
+              <input type="text" id="new-set-title-input" placeholder="New set title..." maxlength="100">
+              <button type="button" id="create-set-btn" class="slab-button">Create</button>
+            </div>
+            <ul id="set-list"></ul>
           </div>
-          <ul id="set-list"></ul>
         </div>
       </section>
       <section id="set-detail" class="panel folder-layer hidden"></section>
@@ -120,6 +126,14 @@
       </section>
     </main>
   </div>
+
+  <nav id="nav-command-pill">
+    <button type="button" class="nav-pill-btn" onclick="window.goHome()">🏠</button>
+    <button type="button" class="nav-pill-btn" onclick="window.showPanel('ideas', true)">💡</button>
+    <button type="button" class="nav-pill-btn" onclick="window.showPanel('jokes', true)">J</button>
+    <button type="button" class="nav-pill-btn" onclick="window.showPanel('sets', true)">S</button>
+    <button type="button" class="nav-pill-btn" onclick="window.showPanel('settings')">⋮</button>
+  </nav>
 
   <script src="/static/js/dexie.min.js?v=97"></script>
   <script src="/static/js/db.js?v=97"></script>

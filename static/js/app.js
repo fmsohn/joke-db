@@ -300,7 +300,8 @@
   function setIdeasPanelTitle(title) {
     var panelTitle = getIdeasPanelTitleEl();
     if (!panelTitle) return;
-    panelTitle.textContent = title != null && String(title).trim() !== "" ? String(title) : "IDEAS";
+    var t = title != null ? String(title) : "";
+    panelTitle.textContent = t.trim() !== "" ? t : "IDEAS";
   }
 
   function normalizeIdeaFieldValue(field, value) {
@@ -318,9 +319,18 @@
 
   function formatIdeaFieldDisplayValue(idea, field) {
     if (!idea) return "";
-    if (field === "title") return idea.title != null && String(idea.title).trim() ? String(idea.title) : "Untitled Idea";
-    if (field === "content") return idea.content != null && String(idea.content).trim() ? String(idea.content) : "No body yet.";
-    if (field === "topic") return idea.topic != null && String(idea.topic).trim() ? String(idea.topic) : "—";
+    if (field === "title") {
+      var tTitle = idea.title != null ? String(idea.title) : "";
+      return tTitle.trim() !== "" ? tTitle : "Untitled Idea";
+    }
+    if (field === "content") {
+      var tContent = idea.content != null ? String(idea.content) : "";
+      return tContent.trim() !== "" ? tContent : "No body yet.";
+    }
+    if (field === "topic") {
+      var tTopic = idea.topic != null ? String(idea.topic) : "";
+      return tTopic.trim() !== "" ? tTopic : "—";
+    }
     if (field === "tags") return Array.isArray(idea.tags) && idea.tags.length ? idea.tags.join(", ") : "—";
     return "";
   }
@@ -403,6 +413,7 @@
     var modalContainer = document.getElementById("modal-container");
     var targetPanel = tabId === "jokes" ? getJokesPanelEl() : document.getElementById("panel-" + tabId);
     if (modalContainer) modalContainer.setAttribute("aria-hidden", "true");
+    sweepOpenDetailSlabs(true);
     /* Ideas list lives in the panel; never leave an empty #modal-container over the list */
     if (tabId === "ideas" && modalContainer) {
       modalContainer.classList.add("hidden");
@@ -411,7 +422,7 @@
       var udcOpen = document.getElementById("universal-detail-content");
       if (udcOpen) udcOpen.innerHTML = "";
     }
-    showPanel(tabId);
+    showPanel(tabId, false);
     targetPanel = tabId === "jokes" ? getJokesPanelEl() : document.getElementById("panel-" + tabId);
     var folder = tabId === "jokes" ? "jokes" : tabId;
     document.querySelectorAll(".header .tab").forEach(function (t) {
@@ -421,7 +432,9 @@
       b.classList.toggle("active", b.getAttribute("data-folder") === folder);
     });
     if (tabId === "jokes") setJokesNavHeaderRowVisible(true);
+    if (tabId === "ideas") loadIdeas();
     if (tabId === "jokes") loadJokes();
+    if (tabId === "sets") loadSets();
     syncFolderLayerActiveForTab(tabId);
     if (tabId === "ideas") schedulePanelFocus("new-idea-title-input");
     if (tabId === "jokes") schedulePanelFocus("new-joke-title-input");
@@ -442,51 +455,75 @@
   window.showJokeDetail = showJokeDetail;
 
   /**
-   * Closes the full-screen modal: hides #modal-container and returns to main logo/tabs screen.
-   * All panel-close-btn elements are wired to this.
+   * Closes joke/idea detail overlays and #modal-container so NavGrid switches never stack slabs.
+   * @param {boolean} [forPanelSwitch] When true, skip hub/tab reset (used when navigating between panels).
    */
-  function closeModal() {
-    if (document.body) document.body.classList.remove("panel-open");
-    var searchBar = document.getElementById("idea-search-input");
-    if (searchBar) {
-      searchBar.focus();
-    }
+  function sweepOpenDetailSlabs(forPanelSwitch) {
     var jokeDetail = getJokeDetailEl();
     if (jokeDetail && typeof jokeDetail._returnToJokeList === "function") {
       jokeDetail._returnToJokeList();
     } else {
       setJokesDetailVisibility(false);
     }
-    document.querySelectorAll(".folder-layer").forEach(function (el) {
-      el.classList.remove("active");
-    });
-    document.querySelectorAll(".hub-drawer").forEach(function (b) {
-      b.classList.remove("active");
-    });
     var modalContainer = document.getElementById("modal-container");
     if (modalContainer) {
       modalContainer.classList.add("hidden");
-      modalContainer.classList.remove("modal-joke", "modal-idea");
+      modalContainer.classList.remove("modal-joke", "modal-idea", "is-detail-view");
       modalContainer.setAttribute("aria-hidden", "true");
+      var udc = document.getElementById("universal-detail-content");
+      if (udc) udc.innerHTML = "";
     }
-    document.querySelectorAll(".panel, .folder-layer").forEach(function (el) {
-      el.classList.add("hidden");
-    });
-    showPanel("home");
     var panelIdeas = document.getElementById("panel-ideas");
     if (panelIdeas) {
       panelIdeas.classList.remove("is-viewing-detail");
       panelIdeas.classList.remove("is-detail-view");
     }
     setIdeasPanelTitle("IDEAS");
-    if (modalContainer) modalContainer.classList.remove("is-detail-view");
-    if (modalContainer) modalContainer.classList.remove("modal-joke", "modal-idea");
+    document.getElementById("panel-sets")?.classList.remove("hidden");
+    document.getElementById("panel-sets-list")?.classList.remove("hidden");
+    document.getElementById("panel-ideas-list")?.classList.remove("hidden");
+    document.getElementById("panel-jokes-list")?.classList.remove("hidden");
+    if (!forPanelSwitch) {
+      document.querySelectorAll(".folder-layer").forEach(function (el) {
+        el.classList.remove("active");
+      });
+      document.querySelectorAll(".hub-drawer").forEach(function (b) {
+        b.classList.remove("active");
+      });
+    }
+  }
+
+  /**
+   * Closes the full-screen modal: hides #modal-container and returns to main logo/tabs screen.
+   * All panel-close-btn elements are wired to this.
+   * @param {boolean} [sweepOnly] When true, only clear detail slabs (global nav "clean sweep"); no hub navigation.
+   */
+  function closeModal(sweepOnly) {
+    if (!sweepOnly) {
+      if (document.body) document.body.classList.remove("panel-open");
+      var searchBar = document.getElementById("idea-search-input");
+      if (searchBar) {
+        searchBar.focus();
+      }
+    }
+    sweepOpenDetailSlabs(!!sweepOnly);
+    if (sweepOnly) return;
+    document.getElementById("panel-sets-list")?.classList.remove("hidden");
+    document.getElementById("panel-ideas-list")?.classList.remove("hidden");
+    document.getElementById("panel-jokes-list")?.classList.remove("hidden");
+    document.querySelectorAll(".panel, .folder-layer").forEach(function (el) {
+      el.classList.add("hidden");
+    });
+    showPanel("home");
     document.querySelectorAll(".header .tab").forEach(function (t) {
       t.classList.remove("active");
     });
   }
 
-  function showPanel(panelId) {
+  function showPanel(panelId, isNavClick) {
+    if (isNavClick) {
+      closeModal(true);
+    }
     var hub = document.getElementById("workstation-hub");
     var workstationHub = document.getElementById("workstation-hub");
     var normalizedId = panelId != null ? String(panelId).trim() : "";
@@ -498,10 +535,29 @@
       normalizedId = normalizedId.slice(0, -6);
     }
 
+    if (normalizedId === "settings" && !isNavClick) {
+      sweepOpenDetailSlabs(true);
+    }
+
+    var navPill = document.getElementById("nav-command-pill");
+    if (navPill) {
+      if (normalizedId === "home" || !normalizedId) {
+        navPill.classList.remove("nav-active");
+      } else {
+        navPill.classList.add("nav-active");
+      }
+    }
+
     if (normalizedId === "home" || !normalizedId) {
       if (document.body) document.body.classList.remove("panel-open");
       if (hub) hub.classList.remove("hidden");
       if (workstationHub) workstationHub.classList.remove("hidden");
+      document.querySelectorAll(".hub-drawer[data-folder]").forEach(function (b) {
+        b.classList.remove("active");
+      });
+      document.querySelectorAll(".folder-layer").forEach(function (el) {
+        el.classList.remove("active");
+      });
       document.querySelectorAll(".panel").forEach(function (p) {
         p.classList.add("hidden");
       });
@@ -519,6 +575,16 @@
     }
 
     window.scrollTo(0, 0);
+
+    /* After a nav-pill click (isNavClick), refresh list UIs. Internal showPanel(..., false) avoids a clean-sweep + load loop (e.g. set detail). */
+    if (isNavClick && (normalizedId === "sets" || normalizedId === "jokes" || normalizedId === "ideas")) {
+      var panelRefreshId = normalizedId;
+      window.requestAnimationFrame(function () {
+        if (panelRefreshId === "sets") loadSets();
+        else if (panelRefreshId === "jokes") loadJokes();
+        else if (panelRefreshId === "ideas") loadIdeas();
+      });
+    }
   }
 
   var STAGETIME_THEME_KEY = "stagetime_theme";
@@ -612,33 +678,24 @@
 
   function setJokesDetailVisibility(isDetailVisible) {
     var detailEl = getJokeDetailEl();
-    var listEl = getJokeListEl();
-    var quickAddEl = document.getElementById("ws-joke-input");
-    var listHeaderEl = document.getElementById("ws-jokes-list-header");
+    var jokesListFolder = document.getElementById("panel-jokes-list");
     var controlsEl = getJokeControlsEl();
-    var toolbarEl = getJokesToolbarEl();
     var panel = detailEl ? detailEl.closest(".panel") : getJokesPanelEl();
     var panelCloseBtn = panel ? panel.querySelector(".panel-close-btn") : null;
     var modalContainer = document.getElementById("modal-container");
 
     if (isDetailVisible) {
-      if (quickAddEl) quickAddEl.classList.add("hidden");
-      if (listHeaderEl) listHeaderEl.classList.add("hidden");
+      if (jokesListFolder) jokesListFolder.classList.add("hidden");
       if (detailEl) detailEl.classList.remove("hidden");
-      if (listEl) listEl.classList.add("hidden");
       if (controlsEl) controlsEl.classList.add("hidden");
-      if (toolbarEl) toolbarEl.classList.add("hidden");
       var titleH2 = getJokesPanelTitleDisplayEl();
       var titleInp = getJokeEditTitleEl();
       if (titleH2) titleH2.classList.add("hidden");
       if (titleInp) titleInp.classList.remove("hidden");
     } else {
-      if (quickAddEl) quickAddEl.classList.remove("hidden");
-      if (listHeaderEl) listHeaderEl.classList.remove("hidden");
+      if (jokesListFolder) jokesListFolder.classList.remove("hidden");
       if (detailEl) detailEl.classList.add("hidden");
-      if (listEl) listEl.classList.remove("hidden");
       if (controlsEl) controlsEl.classList.remove("hidden");
-      if (toolbarEl) toolbarEl.classList.remove("hidden");
       setJokesPanelHeaderListMode();
     }
     if (panelCloseBtn) panelCloseBtn.style.display = isDetailVisible ? "none" : "";
@@ -751,12 +808,10 @@
     var el = document.createElement("div");
     el.className = "slab-item joke-slab joke-item";
     el.setAttribute("role", "listitem");
-    el.setAttribute("data-id", String(joke.id));
+    el.setAttribute("data-id", joke.id != null ? String(joke.id) : "");
     var jid = joke.id;
-    var titleText =
-      joke.title != null && String(joke.title).trim() !== ""
-        ? String(joke.title).trim()
-        : "Untitled";
+    var titleRaw = joke.title != null ? String(joke.title) : "";
+    var titleText = titleRaw.trim() !== "" ? titleRaw.trim() : "Untitled";
 
     var titleEl = document.createElement("span");
     titleEl.className = "slab-title";
@@ -784,17 +839,20 @@
     var el = document.createElement("div");
     el.className = "slab-item idea-slab idea-item";
     el.setAttribute("role", "listitem");
-    el.dataset.id = idea.id;
+    el.dataset.id = idea.id != null ? String(idea.id) : "";
     el.addEventListener("click", function () {
       showIdeaDetail(idea.id);
     });
+    var tTitle = idea.title != null ? String(idea.title) : "";
+    var tPrem = idea.premise != null ? String(idea.premise) : "";
+    var tContent = idea.content != null ? String(idea.content) : "";
     var titleRaw =
-      idea.title != null && String(idea.title).trim() !== ""
-        ? String(idea.title).trim()
-        : idea.premise != null && String(idea.premise).trim() !== ""
-          ? String(idea.premise).trim()
-          : idea.content != null && String(idea.content).trim() !== ""
-            ? String(idea.content).trim()
+      tTitle.trim() !== ""
+        ? tTitle.trim()
+        : tPrem.trim() !== ""
+          ? tPrem.trim()
+          : tContent.trim() !== ""
+            ? tContent.trim()
             : "Untitled Idea";
     var titleEl = document.createElement("span");
     titleEl.className = "slab-title idea-title idea-title-text title";
@@ -804,8 +862,12 @@
   }
 
   function createSetCard(set) {
-    var name = escapeHtml(set.name || "Untitled");
-    return "<li class=\"set-item slab-item card\" data-action=\"view-set-detail\" data-id=\"" + String(set.id) + "\">" +
+    set = set || {};
+    var nameRaw = set.name != null ? String(set.name) : "";
+    var titleForDisplay = nameRaw.trim() !== "" ? nameRaw : "Untitled";
+    var name = escapeHtml(titleForDisplay);
+    var idAttr = set.id != null ? String(set.id) : "";
+    return "<li class=\"set-item slab-item card\" data-action=\"view-set-detail\" data-id=\"" + idAttr + "\">" +
       "<span class=\"slab-title title\">" + name + "</span>" +
       "</li>";
   }
@@ -831,7 +893,8 @@
     }
     if (optionalSelectJokeId) {
       el.querySelectorAll(".joke-item").forEach(function (x) { x.classList.remove("active"); });
-      var activeCard = el.querySelector(".joke-item[data-id=\"" + optionalSelectJokeId + "\"]");
+      var jokeSelId = optionalSelectJokeId != null ? String(optionalSelectJokeId) : "";
+      var activeCard = el.querySelector(".joke-item[data-id=\"" + jokeSelId + "\"]");
       if (activeCard) activeCard.classList.add("active");
       showJokeDetail(optionalSelectJokeId);
     } else {
@@ -890,8 +953,8 @@
         return dataLayer.getMasterTopics().then(function (topics) {
           (topics || []).forEach(function (t) {
             var opt = document.createElement("option");
-            opt.value = t;
-            opt.textContent = escapeHtml(t);
+            opt.value = t != null ? String(t) : "";
+            opt.textContent = escapeHtml(t != null ? String(t) : "");
             topicEl.appendChild(opt);
           });
           renderJokeList(optionalSelectJokeId);
@@ -957,12 +1020,20 @@
 
   window.focusJokeBodyIfEmpty = focusJokeBodyIfEmpty;
 
-  function applyModalContentTypeClass(item) {
+  function applyModalContentTypeClass(type, item) {
     var modalContainer = document.getElementById("modal-container");
     if (!modalContainer) return;
     modalContainer.classList.remove("modal-joke", "modal-idea");
+    if (type === "joke") {
+      modalContainer.classList.add("modal-joke");
+      return;
+    }
+    if (type === "idea") {
+      modalContainer.classList.add("modal-idea");
+      return;
+    }
     if (!item || typeof item !== "object") return;
-    if (item.premise != null) {
+    if (item.premise != null && item.type !== "idea") {
       modalContainer.classList.add("modal-joke");
       return;
     }
@@ -980,7 +1051,7 @@
   function renderUniversalDetail(type, data, opts) {
     data = data || {};
     opts = opts || {};
-    applyModalContentTypeClass(data);
+    applyModalContentTypeClass(type, data);
     var el = opts.el;
     if (!el) {
       if (type === "joke") el = getJokeDetailEl();
@@ -1041,27 +1112,31 @@
       var parts = splitJokeActOutPunchline(j.punchline);
       var premiseIn = document.getElementById("joke-edit-premise");
       if (premiseIn) {
-        var prem = j.premise != null && String(j.premise).trim() !== "" ? String(j.premise) : (j.content != null ? String(j.content) : "");
+        var premRaw = j.premise != null ? String(j.premise) : "";
+        var prem = premRaw.trim() !== "" ? premRaw : (j.content != null ? String(j.content) : "");
         premiseIn.value = prem;
       }
       var punchIn = document.getElementById("joke-edit-punchline");
       if (punchIn) {
-        var actPart = j.act_out != null ? String(j.act_out).trim() : (parts.actOut || "");
+        var actRaw = j.act_out != null ? String(j.act_out) : "";
+        var actPart = actRaw.trim() !== "" ? actRaw.trim() : (parts.actOut || "");
         var punchPart = parts.punch || "";
+        var punchRaw = j.punchline != null ? String(j.punchline) : "";
         if (actPart && punchPart) punchIn.value = actPart + "\n\n" + punchPart;
         else if (actPart) punchIn.value = actPart;
         else if (punchPart) punchIn.value = punchPart;
-        else if (j.punchline != null && String(j.punchline).trim() !== "") punchIn.value = String(j.punchline);
+        else if (punchRaw.trim() !== "") punchIn.value = punchRaw;
         else punchIn.value = "";
       }
       var st = document.getElementById("joke-edit-status");
-      if (st) st.value = j.status || "draft";
+      var statusRaw = j.status != null ? String(j.status) : "";
+      if (st) st.value = statusRaw.trim() !== "" ? statusRaw : "draft";
       var dur = document.getElementById("joke-edit-duration");
       if (dur) dur.value = j.duration != null && j.duration !== "" && !isNaN(Number(j.duration)) ? String(j.duration) : "";
       var rt = document.getElementById("joke-edit-rating");
-      if (rt) rt.value = j.rating != null && j.rating !== "" ? String(j.rating) : "";
+      if (rt) rt.value = j.rating != null ? String(j.rating) : "";
       var tagsIn = document.getElementById("joke-edit-tags");
-      if (tagsIn) tagsIn.value = Array.isArray(j.tags) ? j.tags.join(", ") : "";
+      if (tagsIn) tagsIn.value = Array.isArray(j.tags) ? j.tags.map(function (t) { return t != null ? String(t) : ""; }).filter(function (s) { return s !== ""; }).join(", ") : "";
       var notes = document.getElementById("joke-edit-setup_notes");
       if (notes) notes.value = j.setup_notes != null ? String(j.setup_notes) : "";
     } else if (type === "idea") {
@@ -1075,18 +1150,25 @@
       modalContainer.classList.add("is-detail-view");
       modalContainer.classList.remove("hidden");
       modalContainer.setAttribute("aria-hidden", "false");
-      var idArg = ideaId != null && !isNaN(ideaId) ? String(ideaId) : "null";
+      var ideaTitleStr = item.title != null ? String(item.title) : "";
+      var ideaTitleHeading = ideaTitleStr.trim() !== "" ? ideaTitleStr : "Untitled Idea";
+      var ideaBodyStr =
+        item.content != null ? String(item.content) : (item.premise != null ? String(item.premise) : "");
+      var ideaNotesStr =
+        item.notes != null ? String(item.notes) : (item.setup_notes != null ? String(item.setup_notes) : "");
       contentPane.innerHTML =
         `<div class="modal-detail-shell">` +
         `<div class="branded-modal-content idea-silo-spine">` +
-        `<h2 class="joke-detail-title" id="modal-idea-title">${escapeHtml(item.title != null && String(item.title).trim() !== "" ? String(item.title) : "Untitled Idea")}</h2>` +
-        `<div class="modal-form-row"><p class="detail-label">Content</p><textarea id="idea-focus-content" class="live-edit-field" rows="7">${escapeHtml(item.content != null ? String(item.content) : "")}</textarea></div>` +
-        `<div class="modal-form-row"><p class="detail-label">Notes</p><textarea id="idea-focus-notes" class="live-edit-field" rows="4">${escapeHtml(item.notes != null ? String(item.notes) : (item.setup_notes != null ? String(item.setup_notes) : ""))}</textarea></div>` +
+        `<div class="idea-detail-header-row">` +
+        `<h2 class="joke-detail-title" id="modal-idea-title">${escapeHtml(ideaTitleHeading)}</h2>` +
+        `</div>` +
+        `<div class="modal-form-row"><p class="detail-label">Content</p><textarea id="idea-focus-content" class="live-edit-field" rows="7">${escapeHtml(ideaBodyStr)}</textarea></div>` +
+        `<div class="modal-form-row"><p class="detail-label">Notes</p><textarea id="idea-focus-notes" class="live-edit-field" rows="4">${escapeHtml(ideaNotesStr)}</textarea></div>` +
         `<div class="silo-footer-actions">` +
-        `<button type="button" class="silo-slab" onclick="window.saveIdea(${idArg})">SAVE</button>` +
-        `<button type="button" class="silo-slab" onclick="window.openSetPicker(${idArg}, 'idea')">+SET</button>` +
+        `<button type="button" class="silo-slab" onclick="window.saveIdea(${ideaId != null && !isNaN(ideaId) ? String(ideaId) : "null"})">SAVE</button>` +
+        `<button type="button" class="silo-slab" onclick="window.openSetPicker(${ideaId != null && !isNaN(ideaId) ? String(ideaId) : "null"}, 'idea')">+SET</button>` +
         `<button type="button" class="silo-slab" onclick="window.closeModal()">←</button>` +
-        `<button type="button" class="silo-slab silo-btn-danger" onclick="window.deleteIdea(${idArg})">DEL</button>` +
+        `<button type="button" class="silo-slab silo-btn-danger" onclick="window.deleteIdea(${ideaId != null && !isNaN(ideaId) ? String(ideaId) : "null"})">DEL</button>` +
         `</div>` +
         `<button type="button" id="idea-detail-btn-convert" class="convert-joke-trigger silo-slab">CONVERT TO JOKE</button>` +
         `</div>` +
@@ -1212,20 +1294,23 @@
         var el = getJokeDetailEl();
         var listEl = getJokeListEl();
         setJokesDetailVisibility(true);
-        el.dataset.jokeId = j.id;
+        el.dataset.jokeId = j.id != null ? String(j.id) : "";
         window.currentJokeId = j.id;
 
         renderUniversalDetail(
           "joke",
           {
-            title: j.title || "",
-            content: j.content || "",
-            act_out: j.act_out || "",
-            premise: j.premise || "",
-            punchline: j.punchline || "",
-            status: j.status || "draft",
+            title: j.title != null ? String(j.title) : "",
+            content: j.content != null ? String(j.content) : "",
+            act_out: j.act_out != null ? String(j.act_out) : "",
+            premise: j.premise != null ? String(j.premise) : "",
+            punchline: j.punchline != null ? String(j.punchline) : "",
+            status: (function () {
+              var s = j.status != null ? String(j.status) : "";
+              return s.trim() !== "" ? s : "draft";
+            })(),
             rating: j.rating != null ? String(j.rating) : "",
-            setup_notes: j.setup_notes || "",
+            setup_notes: j.setup_notes != null ? String(j.setup_notes) : "",
             tags: Array.isArray(j.tags) ? j.tags : [],
             duration: j.duration
           },
@@ -1237,8 +1322,9 @@
         }
         toggleJokeAdmin(false);
         var topicEl = document.getElementById("joke-edit-topic");
-        fillTopicSelect(topicEl, j.topic || "").then(function () {
-          if (topicEl) topicEl.value = j.topic || "";
+        var topicSnap = j.topic != null ? String(j.topic) : "";
+        fillTopicSelect(topicEl, topicSnap).then(function () {
+          if (topicEl) topicEl.value = topicSnap;
         });
 
         function returnToJokeList() {
@@ -1312,7 +1398,7 @@
     if (!el) return;
     if (!sets || sets.length === 0) {
       el.innerHTML = "<li class=\"empty\">No sets yet. Create one below.</li>";
-      returnToSetList();
+      syncSetsListChromeVisible();
       return;
     }
     var html = "";
@@ -1322,11 +1408,12 @@
     el.innerHTML = html;
     if (optionalSelectSetId) {
       el.querySelectorAll(".set-item").forEach(function (x) { x.classList.remove("active"); });
-      var activeCard = el.querySelector(".set-item[data-id=\"" + optionalSelectSetId + "\"]");
+      var setSelId = optionalSelectSetId != null ? String(optionalSelectSetId) : "";
+      var activeCard = el.querySelector(".set-item[data-id=\"" + setSelId + "\"]");
       if (activeCard) activeCard.classList.add("active");
       showSetDetail(optionalSelectSetId);
     } else {
-      returnToSetList();
+      syncSetsListChromeVisible();
     }
   }
 
@@ -1406,6 +1493,7 @@
       var udcBack = document.getElementById("universal-detail-content");
       if (udcBack) udcBack.innerHTML = "";
     }
+    document.getElementById("panel-ideas-list")?.classList.remove("hidden");
     var panel = document.getElementById("panel-ideas");
     if (panel) {
       panel.classList.remove("hidden");
@@ -1486,8 +1574,7 @@
         });
       return;
     }
-    var listEl = document.getElementById("idea-list");
-    if (listEl) listEl.classList.remove("hidden");
+    document.getElementById("panel-ideas-list")?.classList.add("hidden");
     var mc = document.getElementById("modal-container");
     if (mc) {
       mc.classList.add("is-detail-view");
@@ -1500,7 +1587,8 @@
       panel.classList.add("is-detail-view");
       panel.classList.add("is-viewing-detail");
     }
-    setIdeasPanelTitle(ideaRef.title != null && String(ideaRef.title).trim() ? String(ideaRef.title) : "Untitled Idea");
+    var ideaPanelTitleRaw = ideaRef.title != null ? String(ideaRef.title) : "";
+    setIdeasPanelTitle(ideaPanelTitleRaw.trim() !== "" ? ideaPanelTitleRaw : "Untitled Idea");
     renderUniversalDetail("idea", ideaRef);
   }
 
@@ -1520,6 +1608,7 @@
       panel.classList.remove("is-viewing-detail");
       panel.classList.remove("is-detail-view");
     }
+    document.getElementById("panel-ideas-list")?.classList.remove("hidden");
     setIdeasPanelTitle("IDEAS");
     var mc = document.getElementById("modal-container");
     if (mc) mc.classList.remove("is-detail-view");
@@ -1535,21 +1624,31 @@
       .catch(function () {});
   }
 
-  function returnToSetList() {
+  /** List view only: show set list + new form, hide detail slab (no showPanel / loadSets — avoids loops with renderSetsList). */
+  function syncSetsListChromeVisible() {
     var listEl = getSetListEl();
     var detailEl = getSetDetailEl();
     var newFormEl = getSetsNewFormEl();
     var panel = listEl ? listEl.closest(".panel") : null;
     var closeBtn = panel ? panel.querySelector(".panel-close-btn") : null;
     if (closeBtn) closeBtn.style.display = "";
+    if (detailEl) detailEl.classList.add("hidden");
+    window.currentSetId = null;
+    document.getElementById("panel-sets")?.classList.remove("hidden");
+    document.getElementById("panel-sets-list")?.classList.remove("hidden");
+    if (listEl) listEl.classList.remove("hidden");
+    if (newFormEl) newFormEl.classList.remove("hidden");
+  }
+
+  function returnToSetList() {
+    var detailEl = getSetDetailEl();
     if (detailEl) {
       detailEl.innerHTML = "";
     }
     window.currentSetId = null;
-    showPanel("sets");
+    showPanel("sets", true);
     syncFolderLayerActiveForTab("sets");
-    if (listEl) listEl.classList.remove("hidden");
-    if (newFormEl) newFormEl.classList.remove("hidden");
+    syncSetsListChromeVisible();
   }
 
   function renderSetList() {
@@ -1841,15 +1940,16 @@
     var jokesHtml = renderSetItems(items, editOrder);
     var desc = data.set != null ? (data.set.description != null ? String(data.set.description) : "") : "";
     var hasDescription = desc.trim() !== "" && desc.trim().toLowerCase() !== "no description";
-    var setName = data.set != null ? (data.set.name != null ? String(data.set.name) : "") : "";
+    var setTitleVal = data.set != null ? data.set.name : null;
+    var setName = setTitleVal != null ? String(setTitleVal) : "";
     var setNameAttr = setName.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
     var setJokes = items.filter(function (i) {
       var typRaw = i != null ? (i.type != null ? String(i.type) : "") : "";
       var typ = typRaw !== "" ? typRaw : "joke";
       return typ === "joke";
     });
-    var setTimeStr = setJokes.length > 0 ? calculateSetTime(setJokes) : null;
-    var setTimeStrSafe = setTimeStr != null ? String(setTimeStr) : "";
+    var setTimeVal = setJokes.length > 0 ? calculateSetTime(setJokes) : null;
+    var setTimeStrSafe = setTimeVal != null ? String(setTimeVal) : "";
     var setTimeMetaInner = setTimeStrSafe.trim() !== ""
       ? ("Set time: " + escapeHtml(setTimeStrSafe))
       : "Set time: —";
@@ -1939,7 +2039,9 @@
   }
 
   function showSetDetail(id, opts) {
-    showPanel("set-detail");
+    showPanel("sets", false);
+    document.getElementById("panel-sets")?.classList.add("hidden");
+    syncFolderLayerActiveForTab("sets");
     var editOrder = opts && opts.editOrder === true;
     var setP = dataLayer && dataLayer.getSetWithItems
       ? dataLayer.getSetWithItems(id)
@@ -1948,7 +2050,13 @@
     Promise.all([setP, jokesP]).then(function (results) {
         var data = results[0];
         var jokesRaw = results[1];
-        var allJokes = Array.isArray(jokesRaw) ? jokesRaw.filter(function (j) { return (j.type || "joke") === "joke"; }) : [];
+        var allJokes = Array.isArray(jokesRaw)
+          ? jokesRaw.filter(function (j) {
+              var typRaw = j != null && j.type != null ? String(j.type) : "";
+              var typ = typRaw !== "" ? typRaw : "joke";
+              return typ === "joke";
+            })
+          : [];
         return { setData: data, allJokes: allJokes, useItems: !!(data && data.items) };
       })
       .then(function (payload) {
@@ -1956,19 +2064,16 @@
         var allJokes = payload.allJokes || [];
         var useItems = payload.useItems && data.items;
         var items = useItems ? data.items : (data.jokes || []).map(function (j) { return Object.assign({ type: "joke" }, j); });
-        activeSetDetailName = data && data.set && data.set.name != null ? String(data.set.name) : "";
+        var activeTitleVal = data && data.set != null ? data.set.name : null;
+        activeSetDetailName = activeTitleVal != null ? String(activeTitleVal) : "";
         activeSetDetailItems = Array.isArray(items) ? items.slice() : [];
         window.activeSetDetailItems = activeSetDetailItems;
-        var listEl = getSetListEl();
-        var newFormEl = getSetsNewFormEl();
         var el = getSetDetailEl();
         var panel = el.closest(".panel");
         var panelCloseBtn = panel ? panel.querySelector(".panel-close-btn") : null;
         if (panelCloseBtn) panelCloseBtn.style.display = "none";
-        if (listEl) listEl.classList.add("hidden");
-        if (newFormEl) newFormEl.classList.add("hidden");
         el.classList.remove("hidden");
-        el.dataset.setId = id;
+        el.dataset.setId = id != null ? String(id) : "";
         window.currentSetId = id;
         el._setDetailPreferItemRefs = !!(payload.useItems && data.items != null);
         el._pullJokesTableOnly = allJokes.slice();
@@ -1983,7 +2088,8 @@
         window.isEditingSetOrder = isEditingSetOrder;
         var nameInputEl = el.querySelector("#set-detail-name-input");
         if (nameInputEl) {
-          var origNameSnap = data.set && data.set.name != null ? String(data.set.name) : "";
+          var origNameVal = data.set != null ? data.set.name : null;
+          var origNameSnap = origNameVal != null ? String(origNameVal) : "";
           nameInputEl.addEventListener("blur", function () {
             var v = nameInputEl.value != null ? String(nameInputEl.value).trim() : "";
             if (v === "") {
@@ -1991,7 +2097,8 @@
               return;
             }
             if (v === origNameSnap) return;
-            var sid = getSetDetailEl().dataset.setId;
+            var sidRaw = getSetDetailEl().dataset.setId;
+            var sid = sidRaw != null ? String(sidRaw) : "";
             if (!sid) return;
             if (dataLayer && typeof dataLayer.updateSet === "function") {
               dataLayer.updateSet(sid, { name: v }).then(function () {
@@ -2017,7 +2124,8 @@
           var tiles = setDetailEl.querySelectorAll(".set-joke-item");
           tiles.forEach(function (tile) {
             if (bitTile) return;
-            var tileId = tile.getAttribute("data-item-id");
+            var tileIdRaw = tile.getAttribute("data-item-id");
+            var tileId = tileIdRaw != null ? String(tileIdRaw) : "";
             var tileTypeRaw = tile.getAttribute("data-item-type");
             var tileType = tileTypeRaw != null ? String(tileTypeRaw) : "joke";
             if (tileId === safeBitId && tileType === safeItemType) {
@@ -2040,8 +2148,8 @@
               var typ = typRaw !== "" ? typRaw : "joke";
               return typ === "joke";
             });
-            var nextTime = jokesOnly.length > 0 ? calculateSetTime(jokesOnly) : null;
-            var nextTimeStr = nextTime != null ? String(nextTime) : "";
+            var nextTimeVal = jokesOnly.length > 0 ? calculateSetTime(jokesOnly) : null;
+            var nextTimeStr = nextTimeVal != null ? String(nextTimeVal) : "";
             setTimeEl.textContent = nextTimeStr.trim() !== "" ? ("Set time: " + nextTimeStr) : "Set time: —";
           }
 
@@ -2059,8 +2167,11 @@
             e.preventDefault();
             e.stopPropagation();
             var setId = getSetDetailEl().dataset.setId;
-            var itemType = btn.getAttribute("data-item-type") || "joke";
-            var itemId = btn.getAttribute("data-item-id");
+            var itemTypeAttr = btn.getAttribute("data-item-type");
+            var itemTypeRaw = itemTypeAttr != null ? String(itemTypeAttr) : "";
+            var itemType = itemTypeRaw !== "" ? itemTypeRaw : "joke";
+            var itemIdAttr = btn.getAttribute("data-item-id");
+            var itemId = itemIdAttr != null ? String(itemIdAttr) : "";
             removeBitFromSet(setId, itemType, itemId);
           });
         });
@@ -2117,19 +2228,23 @@
         function populateAddBitPullSelect(jokesTableOnly, searchQuery) {
           var select = document.getElementById("add-to-set-joke-select");
           if (!select || !Array.isArray(jokesTableOnly)) return;
-          var q = (searchQuery || "").trim().toLowerCase();
+          var qRaw = searchQuery != null ? String(searchQuery) : "";
+          var q = qRaw.trim().toLowerCase();
           var jokes = jokesTableOnly.filter(function (j) {
-            if ((j.type || "joke") !== "joke") return false;
+            j = j || {};
+            var typeRaw = j.type != null ? String(j.type) : "";
+            var typ = typeRaw !== "" ? typeRaw : "joke";
+            if (typ !== "joke") return false;
             if (!q) return true;
-            var t = (j.title || "").toLowerCase();
-            var p = (j.premise || "").toLowerCase();
+            var t = (j.title != null ? String(j.title) : "").toLowerCase();
+            var p = (j.premise != null ? String(j.premise) : "").toLowerCase();
             return t.indexOf(q) >= 0 || p.indexOf(q) >= 0;
           });
           var currentVal = select.value;
           select.innerHTML = "<option value=\"\">Choose a joke…</option>";
           jokes.forEach(function (j) {
             var opt = document.createElement("option");
-            opt.value = j.id;
+            opt.value = j.id != null ? String(j.id) : "";
             var t = j.title != null ? String(j.title) : "";
             var p = j.premise != null ? String(j.premise) : "";
             var label = t.trim() !== "" ? t : (p.trim() !== "" ? p : "Untitled");
@@ -2144,9 +2259,16 @@
         function refreshSetDetailJokeDropdown() {
           var detail = getSetDetailEl();
           var searchEl = document.getElementById("set-detail-joke-search");
-          var q = searchEl ? searchEl.value : "";
+          var q = searchEl && searchEl.value != null ? String(searchEl.value) : "";
           (dataLayer ? dataLayer.listJokes() : apiFetch("/jokes").then(function (r) { return r.json(); })).then(function (list) {
-            var jokes = Array.isArray(list) ? list.filter(function (j) { return (j.type || "joke") === "joke"; }) : [];
+            var jokes = Array.isArray(list)
+              ? list.filter(function (j) {
+                  j = j || {};
+                  var typeRaw = j.type != null ? String(j.type) : "";
+                  var typ = typeRaw !== "" ? typeRaw : "joke";
+                  return typ === "joke";
+                })
+              : [];
             if (detail) detail._pullJokesTableOnly = jokes;
             populateAddBitPullSelect(jokes, q);
           });
@@ -2384,7 +2506,7 @@
       })
       .then(function (created) {
         closeAddJokeModal();
-        showPanel("jokes");
+        showPanel("jokes", true);
         loadJokes(created.id);
       })
       .catch(function () { alert("Could not save. Try again."); });
@@ -2530,7 +2652,7 @@
           loadIdeas();
           fillDatalists();
         }
-        if (tab === "sets") { returnToSetList(); loadSets(); }
+        if (tab === "sets") returnToSetList();
         if (tab === "settings") showSettingsView("dashboard");
       });
     });
@@ -2738,8 +2860,9 @@
         var row = document.createElement("button");
         row.type = "button";
         row.className = "set-selection-row";
-        row.textContent = s.name && String(s.name).trim() ? s.name : "Untitled";
-        row.setAttribute("data-set-id", String(s.id));
+        var setPickerName = s.name != null ? String(s.name).trim() : "";
+        row.textContent = setPickerName !== "" ? setPickerName : "Untitled";
+        row.setAttribute("data-set-id", s.id != null ? String(s.id) : "");
         row.addEventListener("click", function (e) {
           e.preventDefault();
           var sid = row.getAttribute("data-set-id");
@@ -3451,6 +3574,8 @@
 function runWhenReady() {
   console.log("Stagetime: Engine Started.");
 
+  document.getElementById("nav-command-pill")?.classList.remove("nav-active");
+
   // Immediately hide the sets panel from the JS side to stop the flash
   var setsPanel = document.getElementById('panel-sets');
   if (setsPanel) {
@@ -3559,6 +3684,10 @@ if (document.readyState === 'loading') {
   // 3. THE WIRING (Connecting your buttons to the HTML)
   window.renderSetItems = renderSetItems;
   window.showPanel = showPanel;
+  window.goHome = function () {
+    closeModal();
+    showPanel("home");
+  };
   window.setJokesDetailVisibility = setJokesDetailVisibility;
   window.loadJokes = loadJokes;
   window.renderJokeList = renderJokeList;

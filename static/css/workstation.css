@@ -4,6 +4,49 @@
 * { box-sizing: border-box; }
 .hidden { display: none !important; }
 
+/* --- 1x5 navigation command pill (fixed; visible when a panel is open) --- */
+#nav-command-pill {
+    position: fixed !important;
+    bottom: 20px !important;
+    right: 20px !important;
+    top: auto !important;
+    left: auto !important;
+    z-index: 2000;
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+    background: rgba(0, 0, 0, 0.8);
+    border: 1px solid var(--accent-color);
+    box-shadow: 0 0 15px rgba(var(--accent-rgb), 0.2);
+}
+
+#nav-command-pill.nav-active {
+    display: flex !important;
+}
+
+.nav-pill-btn {
+    width: 45px;
+    height: 45px;
+    padding: 0;
+    box-sizing: border-box;
+    border-radius: 50%;
+    font-family: monospace;
+    font-weight: bold;
+    font-size: 0.85rem;
+    line-height: 1;
+    cursor: pointer;
+    background: var(--bg-recess);
+    color: var(--text-dim);
+    border: 1px solid rgba(var(--accent-rgb), 0.3);
+    box-shadow: 4px 4px 0px #000;
+    transition: all 0.05s ease;
+}
+
+.nav-pill-btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0px #000;
+}
+
 /* --- Form fields: stamped LED labels + 3D neon inset slab --- */
 .detail-label {
     font-size: 0.62rem;
@@ -460,7 +503,6 @@ body #modal-container {
     align-items: center;
     position: fixed;
     inset: 0;
-    z-index: 9000;
     background: rgba(0, 0, 0, 0.85);
     float: none;
     margin-left: 0;
@@ -482,6 +524,8 @@ body #modal-container.modal-idea {
 }
 
 .modal-detail-shell {
+    position: relative;
+    z-index: 1000;
     margin: 0 auto;
     width: 600px;
     max-width: 90%;
@@ -516,6 +560,25 @@ body #modal-container.modal-idea .idea-silo-spine {
     padding: 20px 30px;
     display: flex;
     flex-direction: column;
+}
+
+/* Idea detail header: keep actions above any silo backdrop / siblings; avoid hit-target gaps */
+body #modal-container.modal-idea .idea-detail-header-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    position: relative;
+    z-index: 2;
+    margin: 0 0 12px;
+    pointer-events: auto;
+}
+
+body #modal-container.modal-idea .idea-detail-header-row .joke-detail-title {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    padding-right: 4px;
 }
 
 body #modal-container.modal-idea .idea-silo-spine .detail-label {
