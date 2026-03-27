@@ -1,0 +1,7 @@
+/* theme-ut.css */
+body.theme-ut {
+  --app-bg: #BF5700;
+  --accent-rgb: 191, 87, 0;
+  --btn-bg: #FFFFFF;
+  --btn-text: #BF5700; /* Orange text on white surface */
+}

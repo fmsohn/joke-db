@@ -5,7 +5,7 @@
 (function () {
   "use strict";
 
-  var STORAGE_KEY = "joke_db_storage";
+  var STORAGE_KEY = "stagetime_storage";
   var API = "/api";
 
   function getStorageMode() {
@@ -25,7 +25,7 @@
 
   function getBaseUrl() {
     try {
-      var base = sessionStorage.getItem("joke_db_api_base");
+      var base = sessionStorage.getItem("stagetime_api_base");
       if (base) return base.replace(/\/$/, "");
     } catch (e) {}
     return window.location.origin;
@@ -36,7 +36,7 @@
     opts.credentials = "same-origin";
     return fetch(getBaseUrl() + API + path, opts).then(function (r) {
       if (r.status === 401) {
-        window.location.reload();
+        try { window.dispatchEvent(new CustomEvent("stagetime-401")); } catch (e) {}
         return Promise.reject(new Error("Login required"));
       }
       return r;
@@ -76,19 +76,25 @@
     return apiFetch("/ideas").then(function (r) { return r.json(); });
   }
 
-  function serverAddIdea(content) {
+  function serverAddIdea(ideaOrContent) {
+    var payload = typeof ideaOrContent === "object" && ideaOrContent !== null
+      ? { title: ideaOrContent.title != null ? ideaOrContent.title : "", content: ideaOrContent.content != null ? ideaOrContent.content : "", tags: Array.isArray(ideaOrContent.tags) ? ideaOrContent.tags : [] }
+      : { title: ideaOrContent || "", content: "", tags: [] };
     return apiFetch("/ideas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: content })
+      body: JSON.stringify(payload)
     }).then(function (r) { return r.json(); });
   }
 
-  function serverUpdateIdea(id, content) {
+  function serverUpdateIdea(id, payload) {
+    var body = typeof payload === "object" && payload !== null
+      ? { title: payload.title != null ? payload.title : "", content: payload.content != null ? payload.content : "", topic: payload.topic, tags: Array.isArray(payload.tags) ? payload.tags : [] }
+      : { content: payload || "" };
     return apiFetch("/ideas/" + id, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: content })
+      body: JSON.stringify(body)
     }).then(function (r) { return r.json(); });
   }
 
@@ -340,10 +346,10 @@
         : serverListIdeas();
     },
 
-    addIdea: function (content) {
+    addIdea: function (ideaOrContent) {
       return getStorageMode() === "local"
-        ? window.JokeDBLocal.addIdea(content)
-        : serverAddIdea(content);
+        ? window.JokeDBLocal.addIdea(ideaOrContent)
+        : serverAddIdea(ideaOrContent);
     },
 
     updateIdea: function (id, content) {

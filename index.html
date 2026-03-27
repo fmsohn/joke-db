@@ -3,205 +3,126 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <meta name="theme-color" content="#4169E1">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Stagetime">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#050505">
+  <meta name="version" content="2.0.5">
   <meta name="mobile-web-app-capable" content="yes">
-  <title>Stagetime</title>
-  <link rel="icon" type="image/png" href="static/icons/AppIcon.png">
-  <link rel="apple-touch-icon" href="static/icons/AppIcon.png">
-  <link rel="manifest" href="static/manifest.json">
-  <link rel="stylesheet" href="static/css/style.css?v=11">
+  <meta name="apple-mobile-web-app-title" content="StageTime">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>StageTime</title>
+  
+  <!-- Asset 97 — cache-bust with ASSET_VERSION + sw.js CACHE_NAME -->
+  <link rel="icon" type="image/png" href="/static/icons/AppIcon.png?v=97">
+  <link rel="apple-touch-icon" href="/static/icons/AppIcon.png?v=97">
+  <link rel="manifest" href="/manifest.json?v=97">
+  
+  <script>var ASSET_VERSION = "97";</script>
+  <link rel="stylesheet" href="/static/css/variables.css?v=97">
+  <link rel="stylesheet" href="/static/css/workstation.css?v=97">
+
   <script>
-    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function() {});
-    if (typeof navigator.serviceWorker !== "undefined") navigator.serviceWorker.register("sw.js").catch(function() {});
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
   </script>
 </head>
 <body>
-  <div id="storage-notice" class="storage-notice hidden" role="alert">
-    <p>Open Stagetime to refresh local storage.</p>
-    <button type="button" id="storage-notice-dismiss">OK</button>
-  </div>
-  <div id="auth-shell" class="auth-shell hidden" style="display: none !important;">
-    <div class="auth-box">
-      <h1>Stagetime</h1>
-      <p class="auth-subtitle">Log in or create an account</p>
-      <p class="auth-same-device">Use the <strong>same account</strong> on your phone and computer so your jokes and ideas appear everywhere.</p>
-      <p class="auth-criteria">Username: any length, case doesn't matter. Password: any length (both cannot be blank).</p>
-      <div class="auth-tabs">
-        <button type="button" class="auth-tab active" data-auth="login">Log in</button>
-        <button type="button" class="auth-tab" data-auth="register">Register</button>
-      </div>
-      <form id="auth-form" class="auth-form">
-        <input type="text" id="auth-username" placeholder="Username" autocomplete="username">
-        <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password">
-        <p id="auth-error" class="result error hidden"></p>
-        <button type="submit" id="auth-submit">Log in</button>
-      </form>
-    </div>
-  </div>
-
   <div id="app-shell">
-  <header class="header">
-    <div class="header-top-row">
-      <span id="user-info" class="user-info"></span>
-      <img src="static/logo.png" alt="Stagetime" class="header-logo header-logo-img">
-      <h1 class="header-title">Stagetime</h1>
+    <div id="workstation-hub">
+      <img src="/static/icons/logo.png" alt="StageTime" class="workstation-logo" width="400" height="400">
+      <div id="drawer-grid">
+        <button type="button" class="hub-drawer" data-folder="ideas">Ideas</button>
+        <button type="button" class="hub-drawer" data-folder="jokes">Jokes</button>
+        <button type="button" class="hub-drawer" data-folder="sets">Sets</button>
+        <button type="button" class="hub-drawer" data-folder="settings">Settings</button>
+      </div>
     </div>
-    <nav class="tabs">
-      <button type="button" class="tab active" data-tab="ideas">Ideas</button>
-      <button type="button" class="tab" data-tab="jokes">Jokes</button>
-      <button type="button" class="tab" data-tab="sets">Sets</button>
-      <button type="button" class="tab" data-tab="add">Add Joke</button>
-      <button type="button" class="tab tab-import" data-tab="import">Export / Import</button>
-    </nav>
-    <div class="header-below-tabs">
-      <button type="button" id="install-btn" class="install-btn hidden" title="Install Stagetime to use offline">Install app</button>
-      <button type="button" id="fullscreen-btn" class="fullscreen-btn hidden" title="Hide browser bar">Full screen</button>
-    </div>
-  </header>
 
-  <main class="main">
-    <!-- Export / Import: .txt backup only (app is offline-only) -->
-    <section id="panel-import" class="panel import-panel hidden">
-      <div id="import-export-box" class="form-box import-export-box">
-        <h3>Export to .txt file</h3>
-        <p class="import-description">Download your ideas, jokes, and sets as one .txt file (backup or move to another device).</p>
-        <button type="button" id="export-txt-btn">Export to .txt</button>
-        <p id="export-result" class="result hidden"></p>
+    <main id="main-content">
+      <div id="modal-container" class="hidden">
+        <div id="universal-detail-content" class="modal-content"></div>
       </div>
-      <div id="import-from-file-box" class="form-box import-from-file-box import-primary">
-        <h3>Import from .txt file</h3>
-        <p class="import-description">Choose a .txt file created by Stagetime to add its ideas, jokes, and sets to this device.</p>
-        <input type="file" id="import-file-input" accept=".txt,text/plain" class="import-file-input">
-        <label for="import-file-input" class="import-file-label">Choose .txt file</label>
-        <p id="import-file-result" class="result hidden"></p>
-      </div>
-    </section>
 
-    <!-- Ideas: one line each, convert to joke -->
-    <section id="panel-ideas" class="panel active">
-      <form id="add-idea-form" class="form-box form-inline">
-        <input type="text" id="new-idea-content" placeholder="One-line idea..." maxlength="500">
-        <button type="submit" id="add-idea">Add idea</button>
-      </form>
-      <ul id="idea-list" class="card-list"></ul>
-    </section>
+      <!-- IDEAS PANEL -->
+      <section id="panel-ideas" class="panel folder-layer hidden" data-folder="ideas">
+        <div class="panel-topbar">
+          <button type="button" class="panel-close-btn" onclick="closeModal()">Close</button>
+          <h2 class="panel-title">Ideas</h2>
+        </div>
+        <div id="ideas-workstation" class="panel-body">
+          <input type="text" id="idea-search-input" placeholder="Search ideas..." class="search-bar">
+          <div id="quick-add-row" class="quick-add-row">
+            <input type="text" id="new-idea-title-input" placeholder="Quick idea..." maxlength="500">
+            <button type="button" id="create-idea-btn" class="slab-button">Add</button>
+          </div>
+          <ul id="idea-list"></ul>
+          <div id="idea-detail" class="hidden"></div>
+        </div>
+      </section>
 
-    <!-- Jokes list -->
-    <section id="panel-jokes" class="panel">
-      <div class="toolbar">
-        <select id="filter-status">
-          <option value="">All</option>
-          <option value="draft">Draft</option>
-          <option value="testing">Testing</option>
-          <option value="active">Active</option>
-          <option value="retired">Retired</option>
-        </select>
-        <button type="button" id="refresh-jokes">Refresh</button>
-      </div>
-      <ul id="joke-list" class="card-list"></ul>
-      <div id="joke-detail" class="detail hidden"></div>
-    </section>
+      <!-- JOKES PANEL -->
+      <section id="panel-jokes" class="panel folder-layer hidden" data-folder="jokes">
+        <div class="panel-topbar">
+          <button type="button" class="panel-close-btn" onclick="closeModal()">Close</button>
+          <h2 class="panel-title jokes-panel-title-static" id="jokes-panel-title-display">Jokes</h2>
+          <input type="text" id="joke-edit-title" class="panel-title jokes-panel-title-input hidden" maxlength="500" autocomplete="off" aria-label="Joke title">
+        </div>
+        <div class="panel-body">
+          <div id="ws-joke-input" class="quick-add-row">
+            <input type="text" id="new-joke-title-input" placeholder="Quick joke title..." maxlength="200">
+            <button type="button" id="create-joke-btn" class="slab-button">Add</button>
+          </div>
+          <div id="ws-jokes-list-header">
+            <div id="jokes-toolbar">
+              <select id="joke-filter-status" class="workstation-select">
+                <option value="">All Statuses</option>
+                <option value="draft">Draft</option>
+                <option value="active">Active</option>
+                <option value="retired">Retired</option>
+              </select>
+            </div>
+          </div>
+          <ul id="joke-list"></ul>
+          <div id="jokes-detail-container" class="hidden"></div>
+        </div>
+      </section>
 
-    <!-- Sets list -->
-    <section id="panel-sets" class="panel">
-      <ul id="set-list" class="card-list"></ul>
-      <div id="set-detail" class="detail hidden"></div>
-      <div class="form-box">
-        <h3>New set</h3>
-        <input type="text" id="new-set-name" placeholder="Set name">
-        <input type="text" id="new-set-desc" placeholder="Description (optional)">
-        <button type="button" id="create-set">Create set</button>
-      </div>
-    </section>
+      <!-- SETS PANEL -->
+      <section id="panel-sets" class="panel folder-layer hidden" data-folder="sets">
+        <div class="panel-topbar">
+          <button type="button" class="panel-close-btn" onclick="closeModal()">Close</button>
+          <h2 class="panel-title">Sets</h2>
+        </div>
+        <div class="panel-body">
+          <div class="quick-add-row">
+            <input type="text" id="new-set-title-input" placeholder="New set title..." maxlength="100">
+            <button type="button" id="create-set-btn" class="slab-button">Create</button>
+          </div>
+          <ul id="set-list"></ul>
+        </div>
+      </section>
+      <section id="set-detail" class="panel folder-layer hidden"></section>
 
-    <!-- Add joke form -->
-    <section id="panel-add" class="panel">
-      <form id="add-joke-form" class="form-box">
-        <h3>New joke</h3>
-        <input type="text" id="new-joke-title" placeholder="Title *" required>
-        <textarea id="new-joke-premise" placeholder="Body" rows="6"></textarea>
-        <textarea id="new-joke-punchline" placeholder="Act Out" rows="2"></textarea>
-        <select id="new-joke-status">
-          <option value="draft">Draft</option>
-          <option value="testing">Testing</option>
-          <option value="active">Active</option>
-        </select>
-        <button type="submit">Save joke</button>
-      </form>
-      <p id="add-result" class="result hidden"></p>
-    </section>
-  </main>
+      <!-- SETTINGS PANEL -->
+      <section id="panel-settings" class="panel folder-layer hidden" data-folder="settings">
+        <div class="panel-topbar">
+          <button type="button" class="panel-close-btn" onclick="closeModal()">Close</button>
+          <h2 class="panel-title">Settings</h2>
+        </div>
+        <div class="panel-body setting-controls">
+          <select id="settings-theme-select" class="workstation-select">
+            <option value="default">Default Sky-Blue</option>
+            <option value="fsu">FSU Gold</option>
+            <option value="ut">UT Orange</option>
+          </select>
+          <button type="button" id="export-txt-btn" class="slab-button">Export Backup</button>
+        </div>
+      </section>
+    </main>
   </div>
 
-  <script>
-    (function() {
-      var m = /[?&]api=([^&]+)/.exec(location.search);
-      if (m) {
-        var base = m[1].replace(/\/$/, "");
-        try { sessionStorage.setItem("joke_db_api_base", base); } catch (e) {}
-      }
-      var storage = /[?&]storage=(\w+)/.exec(location.search);
-      if (storage && storage[1] === "local") {
-        try { localStorage.setItem("joke_db_storage", "local"); } catch (e) {}
-      }
-      var fsBtn = document.getElementById("fullscreen-btn");
-      var doc = document.documentElement;
-      var requestFS = doc.requestFullscreen || doc.webkitRequestFullscreen || doc.webkitRequestFullScreen || doc.mozRequestFullScreen || doc.msRequestFullscreen;
-      var exitFS = document.exitFullscreen || document.webkitExitFullscreen || document.webkitCancelFullScreen || document.mozCancelFullScreen || document.msExitFullscreen;
-      var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ("ontouchstart" in window) || (window.innerWidth <= 768);
-      if (fsBtn && requestFS && isMobile) {
-        fsBtn.classList.remove("hidden");
-        function updateFSBtn() {
-          var inFS = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
-          fsBtn.textContent = inFS ? "Exit full screen" : "Full screen";
-        }
-        fsBtn.addEventListener("click", function() {
-          var inFS = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
-          if (inFS && exitFS) exitFS.call(document);
-          else if (!inFS && requestFS) requestFS.call(doc);
-        });
-        document.addEventListener("fullscreenchange", updateFSBtn);
-        document.addEventListener("webkitfullscreenchange", updateFSBtn);
-        document.addEventListener("mozfullscreenchange", updateFSBtn);
-        document.addEventListener("MSFullscreenChange", updateFSBtn);
-      }
-    })();
-  </script>
-  <script src="data.js"></script>
-  <script src="static/js/app.js?v=10"></script>
-  <script>
-    (function () {
-      let deferredPrompt;
-
-      window.addEventListener("beforeinstallprompt", function (e) {
-        e.preventDefault();
-        deferredPrompt = e;
-        var installBtn = document.getElementById("install-btn");
-        if (installBtn) installBtn.classList.remove("hidden");
-      });
-
-      var installBtn = document.getElementById("install-btn");
-      if (installBtn) {
-        installBtn.addEventListener("click", function () {
-          console.log("install-btn click, deferredPrompt:", deferredPrompt);
-
-          if (!deferredPrompt) {
-            console.error("deferredPrompt is undefined, cannot show prompt.");
-            return;
-          }
-
-          deferredPrompt.prompt();
-
-          deferredPrompt.userChoice.then(function (choiceResult) {
-            console.log("userChoice outcome:", choiceResult ? choiceResult.outcome : choiceResult);
-            deferredPrompt = null;
-          });
-        });
-      }
-    })();
-  </script>
+  <script src="/static/js/dexie.min.js?v=97"></script>
+  <script src="/static/js/db.js?v=97"></script>
+  <script src="/static/js/app.js?v=97"></script>
 </body>
 </html>

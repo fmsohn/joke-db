@@ -1,0 +1,184 @@
+/* /static/css/variables.css */
+
+:root {
+  /* Base workstation theme (sky-blue neon) */
+  --accent-color: #00d2ff;
+  --accent-dark: #003e4d;
+  --app-bg: #050505;
+  --3d-light: rgba(0, 210, 255, 0.2);
+  --accent-rgb: 0, 210, 255;
+  --theme-color: var(--app-bg);
+
+  /* Workstation structural tokens (from workstation layer) */
+  --panel-bg: #0a0a0a;
+  --bg-panel: #0a0a0a;
+  /* Raised slab fill (expanded joke actions, etc.) */
+  --slab-physics-bg: #111111;
+  --error-red: #ff4d4d;
+  /* Stage timer / live readouts (high-visibility green) */
+  --neon-green: #39ff14;
+  --slab-height: 52px;
+  --input-height: 45.6px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --set-detail-console-row-height: 36px;
+  --set-detail-slot-size: 24px;
+  --control-border-width: 2px;
+  --focus-ring-width: 1px;
+  --safe-bottom: env(safe-area-inset-bottom, 16px);
+
+  /* Legacy / shared design tokens */
+  --primary-color: var(--accent-color);
+  --bg-dark: var(--app-bg);
+  --accent: var(--accent-color);
+  /* Brand CTA (performance / stagetime); aliases theme accent */
+  --brand-accent: var(--accent-color);
+  --text-on-accent: #000000;
+  --bg-recess: #000000;
+  --border-neon: var(--accent-color);
+  --glow-neon: rgba(var(--accent-rgb), 0.6);
+  /* Centered glow headers (set detail title, shared with joke-detail-title) */
+  --neon-title-glow: 0 0 14px var(--glow-neon), 0 0 28px rgba(var(--accent-rgb), 0.42), 0 0 1px rgba(var(--accent-rgb), 1);
+  --neon-glow-cyan: var(--neon-title-glow);
+
+  --radius: 12px;
+  --shadow-card: 0 6px 12px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.35);
+  --breakpoint-mobile: 768px;
+}
+
+/* FSU: matches body.fsu / body.theme-fsu (see updateAppTheme in app.js) */
+body.fsu,
+body.theme-fsu {
+  --accent-color: #ffd700;
+  --accent-dark: #700000;
+  --app-bg: #782f40;
+  --3d-light: rgba(255, 215, 0, 0.2);
+  --accent-rgb: 255, 215, 0;
+}
+
+/* UT: matches body.ut / body.theme-ut */
+body.ut,
+body.theme-ut {
+  --accent-color: #ff8200;
+  --accent-dark: #331100;
+  --app-bg: #bf5700;
+  --3d-light: rgba(255, 130, 0, 0.2);
+  --accent-rgb: 255, 130, 0;
+}
+
+/* documentElement reads --theme-color for meta[name="theme-color"]; vars live on body otherwise */
+:root:has(body.fsu),
+:root:has(body.theme-fsu) {
+  --theme-color: #782f40;
+}
+
+:root:has(body.ut),
+:root:has(body.theme-ut) {
+  --theme-color: #bf5700;
+}
+
+/* Discovery slicer pane */
+#discovery-slab .filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#discovery-slab #joke-search-input {
+  flex: 1 1 auto;
+}
+
+#slicer-toggle {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+#filter-count-badge {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-color);
+  color: var(--accent-color);
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
+#slicer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 999;
+}
+
+#slicer-overlay.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#slicer-pane {
+  position: fixed;
+  top: 0;
+  right: -300px;
+  width: 300px;
+  height: 100%;
+  z-index: 1000;
+  background: var(--bg-panel);
+  border-left: 2px solid var(--accent-color);
+  box-shadow: -10px 0 28px rgba(0, 0, 0, 0.55);
+  padding: 12px;
+  overflow-y: auto;
+  transition: right 0.3s ease-in-out;
+}
+
+#slicer-pane.is-open {
+  right: 0;
+}
+
+.slicer-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.slicer-pane-title {
+  margin: 0;
+  color: var(--accent-color);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.slicer-section {
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  padding: 6px 8px 10px;
+}
+
+.slicer-section > summary {
+  cursor: pointer;
+  color: var(--accent-color);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.slicer-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.slicer-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slicer-option input[type="checkbox"] {
+  accent-color: var(--accent-color);
+}

@@ -1,0 +1,17 @@
+/* theme-default.css */
+:root {
+    /* DARK MODE FOUNDATION */
+    --app-bg: #050505;          
+    --card-bg: #111111;         
+    
+    /* THE SKY-BLUE NEON COLOR */
+    --btn-bg: #87CEEB;          
+    --btn-text: #000000;        /* Changed to black for better contrast on sky-blue */
+    
+    /* ACCENTS & HOVERS */
+    --accent-glow: rgba(135, 206, 235, 0.6);
+    --btn-hover: #a0daef;       
+    
+    /* SHADOWS */
+    --shadow-neon: 0 0 12px var(--btn-bg), inset 0 0 6px var(--btn-bg);
+}

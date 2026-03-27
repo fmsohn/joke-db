@@ -1,0 +1,13 @@
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# PWA / Build Artifacts
+dist/
+build/
+node_modules/
+
+# OS Files
+.DS_Store
+Thumbs.db

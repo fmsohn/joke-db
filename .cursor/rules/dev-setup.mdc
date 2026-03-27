@@ -1,0 +1,60 @@
+---
+description: Local dev server and ngrok tunnel for the static PWA (no Python).
+globs:
+alwaysApply: false
+---
+
+# Local development and tunneling (static PWA)
+
+Use a **zero-dependency** approach when possible. Do **not** use Python-based servers (e.g. `http.server`).
+
+## Step 1: Choose how to serve the app
+
+- **If Node.js is available:** use `npx http-server` to serve the **project root** on port **5000**.
+- **If Node.js is not available:** use the VS Code **Live Preview** extension and set it to port **5000** (see fallback below).
+
+Serve from the **project root** so `/`, `/sw.js`, `/manifest.json`, and `/static/` resolve correctly for the PWA.
+
+## Step 2: Start the local server
+
+### Option A — Node.js (recommended)
+
+From the project root (folder that contains `index.html`, `sw.js`, `manifest.json`):
+
+```powershell
+cd "C:\Users\Frank\joke-db git\joke-db"
+npx --yes http-server -p 5000 -c-1
+```
+
+- `-p 5000` — serve on port 5000  
+- `-c-1` — disable cache (better for dev)
+
+### Option B — Live Preview (no Node)
+
+1. Install the **Live Preview** extension (Microsoft: `ms-vscode.live-server`).
+2. Set port to **5000**: in VS Code/Cursor settings (JSON), add:
+   ```json
+   "livePreview.portNumber": 5000
+   ```
+3. Open **`index.html`** from the project root in the editor.
+4. Start the server: Command Palette → **“Live Preview: Show Preview (External Server)”** (or the built-in preview, then switch to external server if needed).
+5. Confirm in the UI that it is serving on port **5000**.
+
+## Step 3: Confirm the server is reachable
+
+- In a browser, open: **http://localhost:5000/**  
+- You should see the Stagetime PWA. Only proceed to tunneling after this works.
+
+## Step 4: Start the HTTPS tunnel with ngrok
+
+Run this **only after** the server on port 5000 is running:
+
+```powershell
+& "c:\Users\Frank\AppData\Local\microsoft\windowsapps\ngrok.exe" http 5000
+```
+
+- Uses the full path to `ngrok.exe` so it works even if `ngrok` is not on PATH.
+- Creates a public HTTPS URL that forwards to `localhost:5000`.
+- Copy the `https://...ngrok.io` URL from the ngrok terminal to test the PWA over HTTPS (e.g. for install prompt or service worker).
+
+If you used Live Preview on a **different port**, replace `5000` in the ngrok command with that port.

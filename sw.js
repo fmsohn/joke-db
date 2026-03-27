@@ -1,32 +1,41 @@
-// Stagetime PWA Service Worker – at repo root for GitHub Pages (scope = /)
-var CACHE_NAME = "stagetime-v4";
-var BASE = self.location.pathname.replace(/\/[^/]*$/, "/") || "/";
+/**
+ * Stagetime PWA – Stale-While-Revalidate service worker (root scope).
+ * All precache URLs are absolute from the document origin.
+ * Asset v97 — bump ASSET_VERSION / CACHE_NAME when changing icons/manifest/CSS/JS.
+ */
+const ASSET_VERSION = "97";
+const CACHE_NAME = "stagetime-v97";
 
-function fullUrl(path) {
-  var p = path ? (path.indexOf("/") === 0 ? path.slice(1) : path) : "";
-  return self.location.origin + (BASE + p).replace(/\/+/g, "/");
-}
-
-// index.html and data.js at root; assets under static/
-var SHELL = [
-  "",
-  "index.html",
-  "data.js",
-  "static/css/style.css",
-  "static/js/app.js",
-  "static/manifest.json",
-  "static/logo.png"
-].map(function (path) {
-  return fullUrl(path);
-});
+const PRECACHE_URLS = [
+  "/?v=" + ASSET_VERSION,
+  "/index.html?v=" + ASSET_VERSION,
+  "/manifest.json?v=" + ASSET_VERSION,
+  "/static/css/variables.css?v=" + ASSET_VERSION,
+  "/static/css/layout.css?v=" + ASSET_VERSION,
+  "/static/css/components.css?v=" + ASSET_VERSION,
+  "/static/css/main.css?v=" + ASSET_VERSION,
+  "/static/css/theme-default.css?v=" + ASSET_VERSION,
+  "/static/css/workstation.css?v=" + ASSET_VERSION,
+  "/static/css/styles.css?v=" + ASSET_VERSION,
+  "/static/css/theme-fsu.css?v=" + ASSET_VERSION,
+  "/static/css/theme-ut.css?v=" + ASSET_VERSION,
+  "/static/js/dexie.min.js?v=" + ASSET_VERSION,
+  "/static/js/db.js?v=" + ASSET_VERSION,
+  "/static/js/app.js?v=" + ASSET_VERSION,
+  "/static/icons/icon-192.png?v=" + ASSET_VERSION,
+  "/static/icons/icon-512.png?v=" + ASSET_VERSION,
+  "/static/icons/logo.png?v=" + ASSET_VERSION,
+  "/static/screenshots/desktop.png?v=" + ASSET_VERSION,
+  "/static/screenshots/mobile.png?v=" + ASSET_VERSION,
+];
 
 self.addEventListener("install", function (e) {
   e.waitUntil(
     caches.open(CACHE_NAME).then(function (cache) {
-      return Promise.allSettled(SHELL.map(function (url) {
-        return cache.add(new Request(url, { cache: "reload" }));
-      }));
-    }).then(function () { return self.skipWaiting(); })
+      return cache.addAll(PRECACHE_URLS.map(function (u) {
+        return new Request(u, { cache: "reload" });
+      })).then(function () { return self.skipWaiting(); });
+    }).catch(function () { return self.skipWaiting(); })
   );
 });
 
@@ -38,53 +47,34 @@ self.addEventListener("activate", function (e) {
   );
 });
 
-function isAppRequest(pathname) {
-  var base = BASE.replace(/\/$/, "");
-  if (pathname === "/" || pathname === BASE || pathname === base) return true;
-  if (pathname === "/index.html" || pathname === base + "/index.html") return true;
-  if (pathname.indexOf(base + "/static/") === 0) return true;
-  if (pathname.indexOf(base + "/") === 0) return true;
-  return false;
-}
-
-function getAppShellResponse(cache) {
-  return cache.match(fullUrl("index.html"))
-    .then(function (r) { return r || cache.match(fullUrl("")); });
-}
-
 self.addEventListener("fetch", function (e) {
   if (e.request.method !== "GET") return;
-  var u = new URL(e.request.url);
-  if (u.origin !== self.location.origin) return;
-  if (!isAppRequest(u.pathname)) return;
-
+  if (e.request.url.indexOf(self.location.origin) !== 0) return;
+  var cacheMatch = caches.match(e.request, { ignoreSearch: true });
+  /* Background revalidate when we have a cached response (stale-while-revalidate) */
+  var revalidate = cacheMatch.then(function (cached) {
+    if (!cached) return Promise.resolve();
+    return fetch(e.request).then(function (res) {
+      if (res && res.status === 200 && res.type === "basic") {
+        return caches.open(CACHE_NAME).then(function (cache) { try { cache.put(e.request, res); } catch (err) {} });
+      }
+    }).catch(function () {});
+  });
+  e.waitUntil(revalidate);
   e.respondWith(
-    caches.open(CACHE_NAME).then(function (cache) {
-      return cache.match(e.request, { ignoreSearch: true }).then(function (cached) {
-        if (cached) return cached;
-        if (e.request.mode === "navigate") {
-          return getAppShellResponse(cache).then(function (shell) {
-            if (shell) return shell;
-            return fetch(e.request).then(function (res) {
-              if (res && res.ok && res.type === "basic") {
-                try { cache.put(e.request, res.clone()); } catch (err) {}
-              }
-              return res;
-            });
-          });
+    cacheMatch.then(function (cached) {
+      if (cached) return cached;
+      return fetch(e.request).then(function (res) {
+        if (res && res.status === 200 && res.type === "basic") {
+          var clone = res.clone();
+          caches.open(CACHE_NAME).then(function (cache) { try { cache.put(e.request, clone); } catch (err) {} });
         }
-        return fetch(e.request).then(function (res) {
-          if (res && res.status === 200 && res.type === "basic") {
-            try { cache.put(e.request, res.clone()); } catch (err) {}
-          }
-          return res;
-        }).catch(function () {
-          return cache.match(e.request, { ignoreSearch: true }).then(function (c2) {
-            if (c2) return c2;
-            if (e.request.mode === "navigate") return getAppShellResponse(cache);
-            return new Response("Offline", { status: 503, statusText: "Service Unavailable", headers: new Headers({ "Content-Type": "text/plain" }) });
-          });
-        });
+        return res;
+      }).catch(function () {
+        if (e.request.mode === "navigate") {
+          return caches.match("/index.html").then(function (r) { return r || new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } }); });
+        }
+        return new Response("", { status: 503 });
       });
     })
   );

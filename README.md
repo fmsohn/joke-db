@@ -2,6 +2,12 @@
 
 A small SQLite-based database and Python helpers for comedians to manage jokes, sets, tags, venues, and performance notes.
 
+## Version 0.5.0 (PWA release)
+
+- **PWA support:** Add to Home Screen via root `manifest.json` with correct icon paths (`/static/icons/icon-192.png`, `/static/icons/icon-512.png`). Service worker (`sw.js`) uses Network-First for the main document and Cache-First for static assets to avoid reload loops.
+- **Absolute path fixes:** Flask `template_folder` and `static_folder` are set with `os.path.abspath(os.path.join(...))` so the app finds templates and static files regardless of terminal working directory. Scripts in `archive/` use a root-path injection so `from archive import joke_db` works from any cwd.
+- **Static asset routing:** All JS, CSS, and icons live under `static/` and are referenced in `templates/index.html` via `{{ url_for('static', filename='...') }}`. `data.js` and `manifest.json` are served from `static/`; no root-level asset URLs.
+
 ## Setup
 
 1. **Create the database** (from the `joke-db` folder):

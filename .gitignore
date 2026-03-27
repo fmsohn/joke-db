@@ -4,9 +4,11 @@ jokes.db
 
 # Python
 __pycache__/
+*.pyc
 *.py[cod]
 *$py.class
 .env
+.env.*
 venv/
 .venv/
 *.egg-info/
@@ -17,3 +19,4 @@ venv/
 .vscode/
 .DS_Store
 Thumbs.db
+._*

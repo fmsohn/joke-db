@@ -1,0 +1,11 @@
+# PWA Versioning & Workstation UI Rules
+
+## 1. Dual-Track Versioning Protocol
+- INTERNAL (Asset Integer): Used for cache-busting (e.g., v16, v17). Increment this integer in `sw.js` (CACHE_NAME) and `index.html` (ASSET_VERSION) whenever a CSS/JS/Manifest file is modified.
+- EXTERNAL (Semantic Version): Used for GitHub releases (e.g., 1.1.2). This remains static in file headers and the footer until a "Product Release" is explicitly requested.
+- AI Requirement: Always append the current Asset Integer as `?v=XX` to all local asset links in `index.html`.
+
+## 2. Workstation UI Standards
+- Search inputs must use the "3D Workstation" look: 2px solid `var(--primary-color)` and a 12px box-shadow.
+- Header Architecture: Maintain the Two-Row Flexbox layout in the Jokes and Ideas modules to prevent layout collapse.
+- Spacing: Enforce a strict 2px vertical gap between navigation and control rows.
