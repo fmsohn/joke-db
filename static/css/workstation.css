@@ -323,7 +323,7 @@ input#modal-idea-title.idea-detail-title:focus {
     box-shadow: 0px 0px 0px transparent;
 }
 
-.delete-btn, #idea-detail-btn-delete {
+.delete-btn {
     color: var(--error-red) !important;
     border-color: var(--error-red) !important;
     box-shadow: 3px 3px 0px #800000 !important;
@@ -466,15 +466,19 @@ body #modal-container {
     margin-left: 0;
 }
 
-body #modal-container.modal-joke,
-body #modal-container.modal-idea {
+body #modal-container.modal-joke {
     display: flex;
     justify-content: center;
     align-items: center;
+    border-left: 5px solid gold;
 }
 
-body #modal-container.modal-joke {
-    border-left: 5px solid gold;
+/* Idea Silo: top of viewport; column flex so use justify-content (main axis = vertical) */
+body #modal-container.modal-idea {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
 }
 
 .modal-detail-shell {
@@ -492,16 +496,19 @@ body #modal-container.modal-joke {
     background-color: var(--panel-bg);
 }
 
-/* Idea Silo: outer shell is centering only; no spine border here */
+/* Idea Silo: outer shell — top-aligned; block layout (not flex centering) */
 body #modal-container.modal-idea .modal-detail-shell {
+    display: block;
     background: transparent;
     border: none;
     box-shadow: none;
-    padding: 0;
+    padding: 20px 0 0;
 }
 
 body #modal-container.modal-idea .idea-silo-spine {
     width: 100%;
+    max-width: 600px;
+    margin: 0 auto;
     background: var(--panel-bg);
     border-left: 10px solid var(--accent-color);
     box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.25);
@@ -535,13 +542,55 @@ body #modal-container.modal-idea #idea-focus-notes:focus {
         0 0 20px rgba(var(--accent-rgb), 0.48);
 }
 
-body #modal-container.modal-idea .idea-silo-spine .joke-master-ribbon-actions {
+body #modal-container.modal-idea .idea-silo-spine .silo-footer-actions {
     width: 100%;
     margin-top: 20px;
     display: flex;
-    flex-wrap: wrap;
+    justify-content: space-between;
     align-items: center;
-    gap: 8px 12px;
+    gap: 8px;
+    padding: 0 20px;
+}
+
+body #modal-container.modal-idea .idea-silo-spine .silo-slab {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 6px;
+    box-sizing: border-box;
+    background: var(--bg-recess);
+    color: var(--text-dim);
+    border: 1px solid rgba(var(--accent-rgb), 0.3);
+    font-family: monospace;
+    font-weight: bold;
+    font-size: 0.8rem;
+    cursor: pointer;
+    box-shadow: 4px 4px 0px #000;
+    transition: all 0.05s ease;
+}
+
+body #modal-container.modal-idea .idea-silo-spine .silo-slab:active {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0px #000;
+}
+
+body #modal-container.modal-idea .idea-silo-spine .silo-slab.silo-btn-danger {
+    border-color: var(--error-red);
+    color: var(--error-red);
+}
+
+body #modal-container.modal-idea .idea-silo-spine .convert-joke-trigger.silo-slab {
+    display: block;
+    width: 100%;
+    margin-top: 12px;
+    flex: none;
+    padding: 10px 8px;
+    font-size: 0.82rem;
+    letter-spacing: 0.06em;
+    box-shadow:
+        4px 4px 0px #000,
+        0 0 12px rgba(var(--accent-rgb), 0.3);
+    border-color: var(--accent-color);
+    color: var(--accent-color);
 }
 
 body #modal-container #universal-detail-content,

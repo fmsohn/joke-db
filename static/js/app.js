@@ -1066,6 +1066,7 @@
       if (notes) notes.value = j.setup_notes != null ? String(j.setup_notes) : "";
     } else if (type === "idea") {
       var item = data;
+      var ideaId = item.id != null ? Number(item.id) : null;
       var modalContainer = document.getElementById("modal-container");
       var contentPane = document.getElementById("universal-detail-content");
       if (!modalContainer || !contentPane) return;
@@ -1074,24 +1075,22 @@
       modalContainer.classList.add("is-detail-view");
       modalContainer.classList.remove("hidden");
       modalContainer.setAttribute("aria-hidden", "false");
-      var headingStr = item.title != null && String(item.title).trim() !== "" ? String(item.title) : "Untitled Idea";
-      var contentStr = item.content != null ? String(item.content) : "";
-      var notesStr = item.notes != null ? String(item.notes) : (item.setup_notes != null ? String(item.setup_notes) : "");
+      var idArg = ideaId != null && !isNaN(ideaId) ? String(ideaId) : "null";
       contentPane.innerHTML =
-        "<div class=\"modal-detail-shell\">" +
-        "<div class=\"branded-modal-content idea-silo-spine\">" +
-        "<h2 class=\"joke-detail-title\" id=\"modal-idea-title\">" + escapeHtml(headingStr) + "</h2>" +
-        "<div class=\"modal-form-row\"><p class=\"detail-label\">Content</p><textarea id=\"idea-focus-content\" class=\"live-edit-field\" rows=\"7\">" + escapeHtml(contentStr) + "</textarea></div>" +
-        "<div class=\"modal-form-row\"><p class=\"detail-label\">Notes</p><textarea id=\"idea-focus-notes\" class=\"live-edit-field\" rows=\"4\">" + escapeHtml(notesStr) + "</textarea></div>" +
-        "<div class=\"joke-master-ribbon-actions\">" +
-        "<button type=\"button\" id=\"idea-detail-save-btn\" class=\"btn-primary\">Save</button>" +
-        "<button type=\"button\" id=\"idea-detail-btn-set\" class=\"btn-primary\">Add to Set</button>" +
-        "<button type=\"button\" id=\"idea-detail-back-btn\" class=\"btn-primary\">Back</button>" +
-        "<button type=\"button\" id=\"idea-detail-btn-delete\" class=\"btn-danger\">Delete</button>" +
-        "<button type=\"button\" id=\"idea-detail-btn-convert\" class=\"btn-primary convert-to-joke-btn\">Convert to Joke</button>" +
-        "</div>" +
-        "</div>" +
-        "</div>";
+        `<div class="modal-detail-shell">` +
+        `<div class="branded-modal-content idea-silo-spine">` +
+        `<h2 class="joke-detail-title" id="modal-idea-title">${escapeHtml(item.title != null && String(item.title).trim() !== "" ? String(item.title) : "Untitled Idea")}</h2>` +
+        `<div class="modal-form-row"><p class="detail-label">Content</p><textarea id="idea-focus-content" class="live-edit-field" rows="7">${escapeHtml(item.content != null ? String(item.content) : "")}</textarea></div>` +
+        `<div class="modal-form-row"><p class="detail-label">Notes</p><textarea id="idea-focus-notes" class="live-edit-field" rows="4">${escapeHtml(item.notes != null ? String(item.notes) : (item.setup_notes != null ? String(item.setup_notes) : ""))}</textarea></div>` +
+        `<div class="silo-footer-actions">` +
+        `<button type="button" class="silo-slab" onclick="window.saveIdea(${idArg})">SAVE</button>` +
+        `<button type="button" class="silo-slab" onclick="window.openSetPicker(${idArg}, 'idea')">+SET</button>` +
+        `<button type="button" class="silo-slab" onclick="window.closeModal()">←</button>` +
+        `<button type="button" class="silo-slab silo-btn-danger" onclick="window.deleteIdea(${idArg})">DEL</button>` +
+        `</div>` +
+        `<button type="button" id="idea-detail-btn-convert" class="convert-joke-trigger silo-slab">CONVERT TO JOKE</button>` +
+        `</div>` +
+        `</div>`;
       el = contentPane;
     }
 
@@ -1527,7 +1526,7 @@
     if (mc) mc.classList.remove("modal-joke", "modal-idea");
   }
 
-  function deleteIdea(ideaId) {
+  function deleteIdeaRequest(ideaId) {
     (dataLayer ? dataLayer.deleteIdea(ideaId) : apiFetch("/ideas/" + ideaId, { method: "DELETE" }))
       .then(function (r) {
         if (r && r.ok === false) throw new Error("Delete failed");
@@ -2794,25 +2793,6 @@
           return;
         }
         if (!btn || !ideaDetailModal.contains(btn)) return;
-        if (btn.id === "idea-detail-save-btn") {
-          e.preventDefault();
-          var curSaveIdea = ideaDetailModal._currentIdea;
-          var saveIdeaId = curSaveIdea && curSaveIdea.id != null ? curSaveIdea.id : null;
-          if (!saveIdeaId) return;
-          saveIdea(saveIdeaId);
-          return;
-        }
-        if (btn.id === "idea-detail-back-btn") {
-          e.preventDefault();
-          closeModal();
-          showPanel("ideas");
-          return;
-        }
-        if (btn.id === "idea-detail-btn-set") {
-          var curSet = ideaDetailModal._currentIdea;
-          if (curSet) openSetPicker(curSet.id, "idea");
-          return;
-        }
         if (btn.id === "idea-detail-btn-convert") {
           var curCv = ideaDetailModal._currentIdea;
           if (!curCv) return;
@@ -2820,14 +2800,6 @@
           closeIdeaDetailModal();
           openModal("jokes");
           showJokeDetail(null);
-          return;
-        }
-        if (btn.id === "idea-detail-btn-delete") {
-          var ideaDel = ideaDetailModal._currentIdea;
-          if (!ideaDel || !confirm("Delete this idea?")) return;
-          deleteIdea(ideaDel.id);
-          closeIdeaDetailModal();
-          loadIdeas();
           return;
         }
         if (btn.getAttribute("data-action") === "update-idea-field") {
@@ -3596,6 +3568,11 @@ if (document.readyState === 'loading') {
   };
   window.fetchJokesForModal = fetchJokesForModal;
   window.saveIdea = saveIdea;
+  window.deleteIdea = function (ideaId) {
+    if (ideaId == null || !confirm("Delete this idea?")) return;
+    deleteIdeaRequest(ideaId);
+    closeIdeaDetailModal();
+  };
   window.showIdeaDetail = showIdeaDetail;
   window.exitJokeConversionToIdea = exitJokeConversionToIdea;
   window.finishNewJokeAfterMoveFromIdea = finishNewJokeAfterMoveFromIdea;

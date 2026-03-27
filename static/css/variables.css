@@ -34,6 +34,8 @@
   /* Brand CTA (performance / stagetime); aliases theme accent */
   --brand-accent: var(--accent-color);
   --text-on-accent: #000000;
+  /* Muted body / secondary control (tech-noir readouts) */
+  --text-dim: #8a9aa3;
   --bg-recess: #000000;
   --border-neon: var(--accent-color);
   --glow-neon: rgba(var(--accent-rgb), 0.6);
