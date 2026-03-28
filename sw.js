@@ -1,10 +1,10 @@
 /**
  * Stagetime PWA – Stale-While-Revalidate service worker (root scope).
  * All precache URLs are absolute from the document origin.
- * Asset v97 — bump ASSET_VERSION / CACHE_NAME when changing icons/manifest/CSS/JS.
+ * Asset v101 — bump ASSET_VERSION / CACHE_NAME when changing icons/manifest/CSS/JS.
  */
-const ASSET_VERSION = "97";
-const CACHE_NAME = "stagetime-v97";
+const ASSET_VERSION = "101";
+const CACHE_NAME = "stagetime-v101";
 
 const PRECACHE_URLS = [
   "/?v=" + ASSET_VERSION,
@@ -17,8 +17,6 @@ const PRECACHE_URLS = [
   "/static/css/theme-default.css?v=" + ASSET_VERSION,
   "/static/css/workstation.css?v=" + ASSET_VERSION,
   "/static/css/styles.css?v=" + ASSET_VERSION,
-  "/static/css/theme-fsu.css?v=" + ASSET_VERSION,
-  "/static/css/theme-ut.css?v=" + ASSET_VERSION,
   "/static/js/dexie.min.js?v=" + ASSET_VERSION,
   "/static/js/db.js?v=" + ASSET_VERSION,
   "/static/js/app.js?v=" + ASSET_VERSION,

@@ -4,20 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="theme-color" content="#050505">
-  <meta name="version" content="2.0.5">
+  <meta name="version" content="2.3.5">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="StageTime">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>StageTime</title>
   
-  <!-- Asset 97 — cache-bust with ASSET_VERSION + sw.js CACHE_NAME -->
-  <link rel="icon" type="image/png" href="/static/icons/AppIcon.png?v=97">
-  <link rel="apple-touch-icon" href="/static/icons/AppIcon.png?v=97">
-  <link rel="manifest" href="/manifest.json?v=97">
+  <!-- Asset v101 — cache-bust with ASSET_VERSION + sw.js CACHE_NAME -->
+  <link rel="icon" type="image/png" href="/static/icons/AppIcon.png?v=101">
+  <link rel="apple-touch-icon" href="/static/icons/AppIcon.png?v=101">
+  <link rel="manifest" href="/manifest.json?v=101">
   
-  <script>var ASSET_VERSION = "97";</script>
-  <link rel="stylesheet" href="/static/css/variables.css?v=97">
-  <link rel="stylesheet" href="/static/css/workstation.css?v=97">
+  <script>var ASSET_VERSION = "101";</script>
+  <link rel="stylesheet" href="/static/css/variables.css?v=101">
+  <link rel="stylesheet" href="/static/css/workstation.css?v=101">
 
   <script>
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
@@ -27,9 +27,30 @@
   </script>
 </head>
 <body>
+  <nav id="nav-command-pill">
+    <button type="button" class="nav-pill-btn" data-nav-panel="home" onclick="window.goHome()">🏠</button>
+    <button type="button" class="nav-pill-btn" data-nav-panel="ideas" onclick="window.showPanel('ideas', true)">💡</button>
+    <button type="button" class="nav-pill-btn" data-nav-panel="jokes" onclick="window.showPanel('jokes', true)">J</button>
+    <button type="button" class="nav-pill-btn" data-nav-panel="sets" onclick="window.showPanel('sets', true)">S</button>
+    <button type="button" class="nav-pill-btn" data-nav-panel="settings" onclick="window.showPanel('settings')">⋮</button>
+  </nav>
+
   <div id="app-shell">
-    <div id="workstation-hub">
-      <img src="/static/icons/logo.png" alt="StageTime" class="workstation-logo" width="400" height="400">
+    <div id="panel-home">
+      <div id="home-hub-v101">
+        <img src="/static/icons/logo.png" alt="StageTime" class="workstation-logo" width="400" height="400">
+        <div class="stats-container" aria-label="Library overview">
+          <div class="stat-tile" data-stat="jokes"><span class="stat-value" id="dash-stat-jokes">0</span><span class="stat-label">Jokes</span></div>
+          <div class="stat-tile" data-stat="runtime"><span class="stat-value" id="dash-stat-runtime">00:00</span><span class="stat-label">Runtime</span></div>
+          <div class="stat-tile" data-stat="ideas"><span class="stat-value" id="dash-stat-ideas">0</span><span class="stat-label">Ideas</span></div>
+          <div class="stat-tile" data-stat="sets"><span class="stat-value" id="dash-stat-sets">0</span><span class="stat-label">Sets</span></div>
+        </div>
+        <div id="status-slicer" class="status-slicer" role="toolbar" aria-label="Dashboard joke filter">
+          <button type="button" class="slicer-pill active" data-status="all">ALL</button>
+          <button type="button" class="slicer-pill" data-status="active">ACTIVE</button>
+          <button type="button" class="slicer-pill" data-status="draft">DRAFT</button>
+        </div>
+      </div>
       <div id="drawer-grid">
         <button type="button" class="hub-drawer" data-folder="ideas">Ideas</button>
         <button type="button" class="hub-drawer" data-folder="jokes">Jokes</button>
@@ -39,14 +60,9 @@
     </div>
 
     <main id="main-content">
-      <div id="modal-container" class="hidden">
-        <div id="universal-detail-content" class="modal-content"></div>
-      </div>
-
       <!-- IDEAS PANEL -->
       <section id="panel-ideas" class="panel folder-layer hidden" data-folder="ideas">
-        <div class="panel-topbar">
-          <button type="button" class="panel-close-btn" onclick="closeModal()">Close</button>
+        <div class="panel-topbar panel-topbar-title-only">
           <h2 class="panel-title">Ideas</h2>
         </div>
         <div id="ideas-workstation" class="panel-body">
@@ -64,8 +80,7 @@
 
       <!-- JOKES PANEL -->
       <section id="panel-jokes" class="panel folder-layer hidden" data-folder="jokes">
-        <div class="panel-topbar">
-          <button type="button" class="panel-close-btn" onclick="closeModal()">Close</button>
+        <div class="panel-topbar panel-topbar-title-only">
           <h2 class="panel-title jokes-panel-title-static" id="jokes-panel-title-display">Jokes</h2>
           <input type="text" id="joke-edit-title" class="panel-title jokes-panel-title-input hidden" maxlength="500" autocomplete="off" aria-label="Joke title">
         </div>
@@ -93,8 +108,7 @@
 
       <!-- SETS PANEL -->
       <section id="panel-sets" class="panel folder-layer hidden" data-folder="sets">
-        <div class="panel-topbar">
-          <button type="button" class="panel-close-btn" onclick="closeModal()">Close</button>
+        <div class="panel-topbar panel-topbar-title-only">
           <h2 class="panel-title">Sets</h2>
         </div>
         <div class="panel-body">
@@ -111,16 +125,12 @@
 
       <!-- SETTINGS PANEL -->
       <section id="panel-settings" class="panel folder-layer hidden" data-folder="settings">
-        <div class="panel-topbar">
-          <button type="button" class="panel-close-btn" onclick="closeModal()">Close</button>
+        <div class="panel-topbar panel-topbar-title-only">
           <h2 class="panel-title">Settings</h2>
         </div>
         <div class="panel-body setting-controls">
-          <select id="settings-theme-select" class="workstation-select">
-            <option value="default">Default Sky-Blue</option>
-            <option value="fsu">FSU Gold</option>
-            <option value="ut">UT Orange</option>
-          </select>
+          <label class="settings-accent-label" for="settings-accent-color">Accent color</label>
+          <input type="color" id="settings-accent-color" class="settings-accent-swatch" value="#00d2ff" title="Accent color" aria-label="Accent color">
           <div class="backup-actions">
             <button type="button" class="slab-button" onclick="window.exportDatabase()">EXPORT BACKUP</button>
             <button type="button" class="slab-button" onclick="window.triggerImport()">IMPORT BACKUP</button>
@@ -131,14 +141,6 @@
     </main>
   </div>
 
-  <nav id="nav-command-pill">
-    <button type="button" class="nav-pill-btn" onclick="window.goHome()">🏠</button>
-    <button type="button" class="nav-pill-btn" onclick="window.showPanel('ideas', true)">💡</button>
-    <button type="button" class="nav-pill-btn" onclick="window.showPanel('jokes', true)">J</button>
-    <button type="button" class="nav-pill-btn" onclick="window.showPanel('sets', true)">S</button>
-    <button type="button" class="nav-pill-btn" onclick="window.showPanel('settings')">⋮</button>
-  </nav>
-
   <div id="set-picker-modal" class="hidden" role="dialog" aria-modal="true" aria-label="Select a set">
     <div id="set-picker-overlay" aria-hidden="true"></div>
     <div class="workstation-card workstation-picker-panel">
@@ -148,8 +150,8 @@
     </div>
   </div>
 
-  <script src="/static/js/dexie.min.js?v=97"></script>
-  <script src="/static/js/db.js?v=97"></script>
-  <script src="/static/js/app.js?v=97"></script>
+  <script src="/static/js/dexie.min.js?v=101"></script>
+  <script src="/static/js/db.js?v=101"></script>
+  <script src="/static/js/app.js?v=101"></script>
 </body>
 </html>

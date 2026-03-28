@@ -633,7 +633,7 @@
   }
 
   window.exportDatabase = function () {
-    var appVersion = typeof window.STAGETIME_APP_VERSION === "string" ? window.STAGETIME_APP_VERSION : "2.3.1";
+    var appVersion = typeof window.STAGETIME_APP_VERSION === "string" ? window.STAGETIME_APP_VERSION : "2.3.3";
     return db.transaction("r", db.jokes, db.ideas, db.sets, db.set_items, function () {
       return Promise.all([
         db.jokes.toArray(),

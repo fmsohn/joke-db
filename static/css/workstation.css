@@ -4,47 +4,66 @@
 * { box-sizing: border-box; }
 .hidden { display: none !important; }
 
-/* --- 1x5 navigation command pill (fixed; visible when a panel is open) --- */
-#nav-command-pill {
-    position: fixed !important;
-    bottom: 20px !important;
-    right: 20px !important;
-    top: auto !important;
-    left: auto !important;
-    z-index: 2000;
+/* --- Top-right command pill (fixed; visible when a folder panel is open; avoids mobile keyboard overlap) --- */
+html body #nav-command-pill {
     display: none;
-    flex-direction: column;
-    gap: 12px;
-    background: rgba(0, 0, 0, 0.8);
-    border: 1px solid var(--accent-color);
-    box-shadow: 0 0 15px rgba(var(--accent-rgb), 0.2);
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 8px);
+    right: 12px;
+    left: auto;
+    bottom: auto;
+    width: auto;
+    max-width: min(calc(100vw - var(--spacing-md) * 2), 320px);
+    height: 42px;
+    padding: 2px;
+    background: rgba(5, 5, 5, 0.9);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid #00f2ff;
+    border-radius: var(--radius);
+    box-shadow: 0 0 10px rgba(0, 242, 255, 0.4);
+    z-index: var(--z-nav-pill-stack, 10006);
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
-#nav-command-pill.nav-active {
+html body #nav-command-pill.nav-active {
     display: flex !important;
 }
 
-.nav-pill-btn {
-    width: 45px;
-    height: 45px;
+html body #nav-command-pill .nav-pill-btn {
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    min-height: 38px;
     padding: 0;
     box-sizing: border-box;
-    border-radius: 50%;
+    border-radius: 0;
     font-family: monospace;
     font-weight: bold;
     font-size: 0.85rem;
     line-height: 1;
     cursor: pointer;
-    background: var(--bg-recess);
+    background: transparent;
     color: var(--text-dim);
-    border: 1px solid rgba(var(--accent-rgb), 0.3);
-    box-shadow: 4px 4px 0px #000;
-    transition: all 0.05s ease;
+    border: none;
+    box-shadow: none;
+    transition: background 0.05s ease, color 0.05s ease, box-shadow 0.05s ease;
 }
 
-.nav-pill-btn:active {
-    transform: translate(2px, 2px);
-    box-shadow: 2px 2px 0px #000;
+html body #nav-command-pill .nav-pill-btn:active {
+    filter: brightness(1.08);
+}
+
+html body #nav-command-pill .nav-pill-btn.active,
+html body #nav-command-pill .nav-pill-btn.active-nav {
+    background: rgba(0, 242, 255, 0.15);
+    box-shadow: inset 0 0 8px rgba(0, 242, 255, 0.2);
+    color: var(--accent-color);
 }
 
 /* --- Form fields: stamped LED labels + 3D neon inset slab --- */
@@ -146,8 +165,119 @@ body.stage-lock-active {
     box-sizing: border-box;
 }
 
-#app-shell #workstation-hub {
+#app-shell #panel-home {
     flex-shrink: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Command dashboard: high-density stat tiles + status strip */
+.stats-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+    margin: 0.75rem 0 0.5rem;
+}
+
+.stat-tile {
+    background: var(--panel-bg);
+    border: 1px solid rgba(var(--accent-rgb), 0.35);
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-height: 64px;
+    justify-content: center;
+}
+
+.stat-tile .stat-value {
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 900;
+    font-size: 1.35rem;
+    color: var(--accent-color);
+    text-shadow: 0 0 8px rgba(var(--accent-rgb), 0.45);
+    line-height: 1.1;
+}
+
+.stat-tile .stat-label {
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
+
+.status-slicer {
+    width: 100%;
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(var(--accent-rgb), 0.22);
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+}
+
+.status-slicer .slicer-pill {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(var(--accent-rgb), 0.4);
+    background: rgba(0, 0, 0, 0.5);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.status-slicer .slicer-pill.active {
+    color: var(--accent-color);
+    border-color: var(--accent-color);
+    box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.35);
+}
+
+#app-shell .panel-topbar.panel-topbar-title-only {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+#app-shell .panel-topbar.panel-topbar-title-only .panel-title {
+    margin-bottom: 0;
+}
+
+.setting-controls .settings-accent-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent-color);
+}
+
+.setting-controls .settings-accent-swatch {
+    width: 100%;
+    height: 48px;
+    padding: 4px;
+    border: 2px solid var(--accent-color);
+    border-radius: 10px;
+    background: var(--bg-recess);
+    cursor: pointer;
+    box-sizing: border-box;
 }
 
 #app-shell #main-content {
@@ -157,7 +287,7 @@ body.stage-lock-active {
     min-height: 0;
     width: 100%;
     align-self: stretch;
-    padding-bottom: 100px;
+    padding-bottom: var(--safe-bottom);
 }
 
 /* --- 2. HOME HUB --- */
@@ -214,6 +344,12 @@ body.stage-lock-active {
     border-radius: 18px;
     width: 100%;
     margin-top: 0;
+}
+
+#app-shell .panel.folder-layer {
+    position: relative;
+    z-index: 1000;
+    background: var(--bg-app);
 }
 
 .panel-title {
@@ -528,9 +664,19 @@ body #modal-container.modal-idea {
     align-items: center;
 }
 
+/* Workstation: idea silo lives in #idea-detail inside the ideas panel */
+body #panel-ideas.modal-idea #idea-detail {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
 .modal-detail-shell {
     position: relative;
-    z-index: 1000;
+    z-index: 2000;
     margin: 0 auto;
     width: 600px;
     max-width: 90%;
@@ -542,11 +688,17 @@ body #modal-container.modal-idea {
 /* Joke detail: same node as .focus-slab — keep slab fill/padding */
 .modal-detail-shell.modal-detail-joke.focus-slab {
     padding: 20px;
-    background-color: var(--panel-bg);
+    background: var(--bg-app);
+}
+
+/* Set detail shell: opaque app fill above modal backdrop */
+.modal-detail-shell.modal-detail-set {
+    background: var(--bg-app);
 }
 
 /* Idea Silo: outer shell — top-aligned; block layout (not flex centering) */
-body #modal-container.modal-idea .modal-detail-shell {
+body #modal-container.modal-idea .modal-detail-shell,
+body #panel-ideas.modal-idea #idea-detail .modal-detail-shell {
     display: block;
     background: transparent;
     border: none;
@@ -554,11 +706,12 @@ body #modal-container.modal-idea .modal-detail-shell {
     padding: 20px 0 0;
 }
 
-body #modal-container.modal-idea .idea-silo-spine {
+body #modal-container.modal-idea .idea-silo-spine,
+body #panel-ideas.modal-idea #idea-detail .idea-silo-spine {
     width: 100%;
     max-width: 600px;
     margin: 0 auto;
-    background: var(--panel-bg);
+    background: var(--bg-app);
     border-left: 10px solid var(--accent-color);
     box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.25);
     filter: drop-shadow(-5px 0 10px rgba(var(--accent-rgb), 0.4));
@@ -568,7 +721,8 @@ body #modal-container.modal-idea .idea-silo-spine {
 }
 
 /* Idea detail header: keep actions above any silo backdrop / siblings; avoid hit-target gaps */
-body #modal-container.modal-idea .idea-detail-header-row {
+body #modal-container.modal-idea .idea-detail-header-row,
+body #panel-ideas.modal-idea #idea-detail .idea-detail-header-row {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -579,20 +733,24 @@ body #modal-container.modal-idea .idea-detail-header-row {
     pointer-events: auto;
 }
 
-body #modal-container.modal-idea .idea-detail-header-row .joke-detail-title {
+body #modal-container.modal-idea .idea-detail-header-row .joke-detail-title,
+body #panel-ideas.modal-idea #idea-detail .idea-detail-header-row .joke-detail-title {
     flex: 1;
     min-width: 0;
     margin: 0;
     padding-right: 4px;
 }
 
-body #modal-container.modal-idea .idea-silo-spine .detail-label {
+body #modal-container.modal-idea .idea-silo-spine .detail-label,
+body #panel-ideas.modal-idea #idea-detail .idea-silo-spine .detail-label {
     color: rgba(var(--accent-rgb), 0.7);
     text-shadow: 0 0 8px rgba(var(--accent-rgb), 0.35);
 }
 
 body #modal-container.modal-idea #idea-focus-content,
-body #modal-container.modal-idea #idea-focus-notes {
+body #modal-container.modal-idea #idea-focus-notes,
+body #panel-ideas.modal-idea #idea-detail #idea-focus-content,
+body #panel-ideas.modal-idea #idea-detail #idea-focus-notes {
     background: var(--bg-recess);
     border: 2px solid rgba(var(--accent-rgb), 0.2);
     border-radius: var(--radius);
@@ -601,7 +759,9 @@ body #modal-container.modal-idea #idea-focus-notes {
 }
 
 body #modal-container.modal-idea #idea-focus-content:focus,
-body #modal-container.modal-idea #idea-focus-notes:focus {
+body #modal-container.modal-idea #idea-focus-notes:focus,
+body #panel-ideas.modal-idea #idea-detail #idea-focus-content:focus,
+body #panel-ideas.modal-idea #idea-detail #idea-focus-notes:focus {
     outline: none;
     border-color: var(--accent-color);
     box-shadow:
@@ -610,7 +770,8 @@ body #modal-container.modal-idea #idea-focus-notes:focus {
         0 0 20px rgba(var(--accent-rgb), 0.48);
 }
 
-body #modal-container.modal-idea .idea-silo-spine .silo-footer-actions {
+body #modal-container.modal-idea .idea-silo-spine .silo-footer-actions,
+body #panel-ideas.modal-idea #idea-detail .idea-silo-spine .silo-footer-actions {
     width: 100%;
     margin-top: 20px;
     display: flex;
@@ -620,7 +781,8 @@ body #modal-container.modal-idea .idea-silo-spine .silo-footer-actions {
     padding: 0 20px;
 }
 
-body #modal-container.modal-idea .idea-silo-spine .silo-slab {
+body #modal-container.modal-idea .idea-silo-spine .silo-slab,
+body #panel-ideas.modal-idea #idea-detail .idea-silo-spine .silo-slab {
     flex: 1;
     min-width: 0;
     padding: 8px 6px;
@@ -636,17 +798,20 @@ body #modal-container.modal-idea .idea-silo-spine .silo-slab {
     transition: all 0.05s ease;
 }
 
-body #modal-container.modal-idea .idea-silo-spine .silo-slab:active {
+body #modal-container.modal-idea .idea-silo-spine .silo-slab:active,
+body #panel-ideas.modal-idea #idea-detail .idea-silo-spine .silo-slab:active {
     transform: translate(2px, 2px);
     box-shadow: 2px 2px 0px #000;
 }
 
-body #modal-container.modal-idea .idea-silo-spine .silo-slab.silo-btn-danger {
+body #modal-container.modal-idea .idea-silo-spine .silo-slab.silo-btn-danger,
+body #panel-ideas.modal-idea #idea-detail .idea-silo-spine .silo-slab.silo-btn-danger {
     border-color: var(--error-red);
     color: var(--error-red);
 }
 
-body #modal-container.modal-idea .idea-silo-spine .convert-joke-trigger.silo-slab {
+body #modal-container.modal-idea .idea-silo-spine .convert-joke-trigger.silo-slab,
+body #panel-ideas.modal-idea #idea-detail .idea-silo-spine .convert-joke-trigger.silo-slab {
     display: block;
     width: 100%;
     margin-top: 12px;
@@ -662,7 +827,8 @@ body #modal-container.modal-idea .idea-silo-spine .convert-joke-trigger.silo-sla
 }
 
 body #modal-container #universal-detail-content,
-body #modal-container .modal-content {
+body #modal-container .modal-content,
+body #panel-ideas.modal-idea #idea-detail {
     margin: 0;
     max-width: 650px;
     width: 92%;
@@ -804,6 +970,15 @@ body #modal-container .modal-content {
     align-items: center;
     gap: 8px 12px;
     min-width: 0;
+}
+
+.joke-master-document .joke-master-admin-toggle-row {
+    order: 11;
+    flex: 1 1 100%;
+    width: 100%;
+    padding-top: 6px;
+    display: flex;
+    justify-content: flex-start;
 }
 
 .joke-master-document .joke-master-ribbon-row .btn-set-trigger {

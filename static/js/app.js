@@ -6,11 +6,11 @@
   var emptyStageMessageTimerId = null;
 
   /** Bumped with releases; pair with index.html ASSET_VERSION + sw.js for cache/SW refresh. */
-  window.STAGETIME_APP_VERSION = "2.3.1";
+  window.STAGETIME_APP_VERSION = "2.3.5";
   window.currentJokeId = null;
   window.currentSetId = null;
-  // Cache-buster asset version: must match index.html ASSET_VERSION and ?v=... querystrings (Asset 97).
-  var VERSION = typeof ASSET_VERSION !== "undefined" ? String(ASSET_VERSION) : "97";
+  // Cache-buster asset version: must match index.html ASSET_VERSION and ?v=... querystrings (Asset v101).
+  var VERSION = typeof ASSET_VERSION !== "undefined" ? String(ASSET_VERSION) : "101";
   window.VERSION = VERSION;
   (function syncVersionFooter() {
     var el = document.getElementById("version-display");
@@ -111,8 +111,6 @@
     var listHeaderEl = document.getElementById("ws-jokes-list-header");
     var toolbarEl = document.getElementById("jokes-toolbar");
     var jokesPanel = getJokesPanelEl();
-    var panelCloseBtn = jokesPanel ? jokesPanel.querySelector(".panel-close-btn") : null;
-    if (panelCloseBtn) panelCloseBtn.style.display = "";
     if (listEl) listEl.classList.remove("hidden");
     if (quickAddEl) quickAddEl.classList.remove("hidden");
     if (listHeaderEl) listHeaderEl.classList.remove("hidden");
@@ -193,6 +191,8 @@
     if (userInfo) userInfo.textContent = username ? "Logged in as " + username : "";
   }
   function renderSets() {
+    var panelSets = document.getElementById("panel-sets");
+    if (!panelSets || panelSets.classList.contains("hidden")) return;
     loadSets();
   }
 
@@ -395,6 +395,31 @@
    * Opens the full-screen modal for the given tab (ideas, jokes, sets, settings).
    * Shows #modal-container and the corresponding panel; hides all other panels.
    */
+  function globalHideFolderLayers() {
+    document.querySelectorAll(".folder-layer").forEach(function (el) {
+      el.style.display = "none";
+      el.classList.add("hidden");
+      el.classList.remove("active");
+      if (el.id === "panel-ideas") {
+        el.classList.remove("is-detail-view", "is-viewing-detail");
+        el.classList.remove("modal-idea", "modal-joke");
+        document.getElementById("panel-ideas-list")?.classList.remove("hidden");
+        var ideaDetLayer = document.getElementById("idea-detail");
+        if (ideaDetLayer) {
+          ideaDetLayer.classList.add("hidden");
+          ideaDetLayer.innerHTML = "";
+          ideaDetLayer.style.display = "";
+        }
+      }
+    });
+  }
+
+  function revealFolderLayer(el) {
+    if (!el) return;
+    el.classList.remove("hidden");
+    el.style.removeProperty("display");
+  }
+
   function syncFolderLayerActiveForTab(tabId) {
     document.querySelectorAll(".folder-layer").forEach(function (el) {
       el.classList.remove("active");
@@ -477,6 +502,13 @@
     if (panelIdeas) {
       panelIdeas.classList.remove("is-viewing-detail");
       panelIdeas.classList.remove("is-detail-view");
+      panelIdeas.classList.remove("modal-idea");
+    }
+    var ideaDetSweep = document.getElementById("idea-detail");
+    if (ideaDetSweep) {
+      ideaDetSweep.classList.add("hidden");
+      ideaDetSweep.innerHTML = "";
+      ideaDetSweep.style.display = "";
     }
     setIdeasPanelTitle("IDEAS");
     document.getElementById("panel-sets")?.classList.remove("hidden");
@@ -494,38 +526,62 @@
   }
 
   /**
-   * Closes the full-screen modal: hides #modal-container and returns to main logo/tabs screen.
-   * All panel-close-btn elements are wired to this.
-   * @param {boolean} [sweepOnly] When true, only clear detail slabs (global nav "clean sweep"); no hub navigation.
+   * Hides the detail overlay (#modal-container) without navigating home.
+   * Panel folder layers stay as-is; use sweepOnly for global nav clean-sweep only.
+   * @param {boolean} [sweepOnly] When true, delegates to sweepOpenDetailSlabs(true).
    */
-  function closeModal(sweepOnly) {
-    if (!sweepOnly) {
-      if (document.body) document.body.classList.remove("panel-open");
-      var searchBar = document.getElementById("idea-search-input");
-      if (searchBar) {
-        searchBar.focus();
-      }
+  function updateNavActiveState(activeId) {
+    var id = activeId != null ? String(activeId).trim() : "";
+    if (id === "panel-dashboard") id = "home";
+    if (id === "jokes-modal" || id === "panel-jokes") id = "jokes";
+    if (id.indexOf("panel-") === 0) id = id.slice(6);
+    if (id.length > 6 && id.indexOf("-panel") === id.length - 6) {
+      id = id.slice(0, -6);
     }
-    sweepOpenDetailSlabs(!!sweepOnly);
-    if (sweepOnly) return;
-    document.getElementById("panel-sets-list")?.classList.remove("hidden");
+    if (!id) id = "home";
+    document.querySelectorAll(".nav-pill-btn").forEach(function (btn) {
+      btn.classList.remove("active", "active-nav");
+      var panel = btn.getAttribute("data-nav-panel");
+      if (panel === id) btn.classList.add("active");
+    });
+  }
+
+  function closeModal(sweepOnly) {
+    if (sweepOnly) {
+      sweepOpenDetailSlabs(true);
+      return;
+    }
+    var modalContainer = document.getElementById("modal-container");
+    if (modalContainer) {
+      modalContainer.classList.add("hidden");
+      modalContainer.classList.remove("is-detail-view", "modal-joke", "modal-idea");
+      modalContainer.setAttribute("aria-hidden", "true");
+      modalContainer.style.display = "";
+    }
+    var udc = document.getElementById("universal-detail-content");
+    if (udc) udc.innerHTML = "";
+    var panelIdeas = document.getElementById("panel-ideas");
+    if (panelIdeas) {
+      panelIdeas.classList.remove("is-viewing-detail", "is-detail-view", "modal-idea");
+    }
+    var ideaDetModalClose = document.getElementById("idea-detail");
+    if (ideaDetModalClose) {
+      ideaDetModalClose.classList.add("hidden");
+      ideaDetModalClose.innerHTML = "";
+      ideaDetModalClose.style.display = "";
+    }
     document.getElementById("panel-ideas-list")?.classList.remove("hidden");
-    document.getElementById("panel-jokes-list")?.classList.remove("hidden");
-    document.querySelectorAll(".panel, .folder-layer").forEach(function (el) {
-      el.classList.add("hidden");
-    });
-    showPanel("home");
-    document.querySelectorAll(".header .tab").forEach(function (t) {
-      t.classList.remove("active");
-    });
+    setIdeasPanelTitle("IDEAS");
+    var jokeDet = document.getElementById("jokes-detail-container");
+    if (jokeDet && !jokeDet.classList.contains("hidden")) {
+      setJokesDetailVisibility(false);
+    }
   }
 
   function showPanel(panelId, isNavClick) {
     if (isNavClick) {
       closeModal(true);
     }
-    var hub = document.getElementById("workstation-hub");
-    var workstationHub = document.getElementById("workstation-hub");
     var normalizedId = panelId != null ? String(panelId).trim() : "";
 
     if (normalizedId === "panel-dashboard") normalizedId = "home";
@@ -541,40 +597,42 @@
 
     var navPill = document.getElementById("nav-command-pill");
     if (navPill) {
-      if (normalizedId === "home" || !normalizedId) {
-        navPill.classList.remove("nav-active");
-      } else {
-        navPill.classList.add("nav-active");
-      }
+      navPill.classList.add("nav-active");
+      navPill.style.display = "flex";
     }
+
+    var panelHome = document.getElementById("panel-home");
 
     if (normalizedId === "home" || !normalizedId) {
       if (document.body) document.body.classList.remove("panel-open");
-      if (hub) hub.classList.remove("hidden");
-      if (workstationHub) workstationHub.classList.remove("hidden");
+      globalHideFolderLayers();
+      document.querySelectorAll('[id^="modal-detail-"], #set-picker-modal').forEach(function (el) {
+        el.classList.remove("active");
+        el.classList.add("hidden");
+      });
+      if (panelHome) {
+        panelHome.classList.remove("hidden");
+        panelHome.style.display = "flex";
+      }
       document.querySelectorAll(".hub-drawer[data-folder]").forEach(function (b) {
         b.classList.remove("active");
       });
-      document.querySelectorAll(".folder-layer").forEach(function (el) {
-        el.classList.remove("active");
-      });
-      document.querySelectorAll(".panel").forEach(function (p) {
-        p.classList.add("hidden");
-      });
     } else {
       if (document.body) document.body.classList.add("panel-open");
-      if (hub) hub.classList.add("hidden");
-      if (workstationHub) workstationHub.classList.add("hidden");
-      document.querySelectorAll(".panel").forEach(function (p) {
-        p.classList.add("hidden");
-      });
+      if (panelHome) {
+        panelHome.classList.add("hidden");
+        panelHome.style.display = "none";
+      }
+      globalHideFolderLayers();
       var targetPanel = document.getElementById(normalizedId + "-panel") ||
         document.getElementById("panel-" + normalizedId) ||
         document.getElementById(normalizedId);
-      if (targetPanel) targetPanel.classList.remove("hidden");
+      if (targetPanel) revealFolderLayer(targetPanel);
     }
 
     window.scrollTo(0, 0);
+
+    updateNavActiveState(normalizedId || "home");
 
     /* After a nav-pill click (isNavClick), refresh list UIs. Internal showPanel(..., false) avoids a clean-sweep + load loop (e.g. set detail). */
     if (isNavClick && (normalizedId === "sets" || normalizedId === "jokes" || normalizedId === "ideas")) {
@@ -587,7 +645,8 @@
     }
   }
 
-  var STAGETIME_THEME_KEY = "stagetime_theme";
+  var STAGETIME_ACCENT_KEY = "stagetime_accent_hex";
+  var DEFAULT_ACCENT_HEX = "#00d2ff";
 
   function updateThemeColorMeta() {
     var meta = document.querySelector('meta[name="theme-color"]');
@@ -596,36 +655,74 @@
     if (themeColor) meta.content = themeColor;
   }
 
-  function updateAppTheme(themeName) {
-    var name = (themeName && String(themeName).toLowerCase()) || "default";
-    if (name !== "default" && name !== "fsu" && name !== "ut") name = "default";
-    if (document.body) {
-      document.body.classList.remove("fsu", "ut", "theme-default", "theme-fsu", "theme-ut");
-      if (name !== "default") {
-        document.body.classList.add(name);
-      }
-      document.body.classList.add("theme-" + name);
+  function hexToRgbForAccent(hex) {
+    var h = hex != null ? String(hex).trim() : "";
+    if (h.indexOf("#") === 0) h = h.slice(1);
+    if (h.length === 3) {
+      h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
     }
+    if (h.length !== 6 || !/^[0-9a-fA-F]+$/.test(h)) return null;
+    return {
+      r: parseInt(h.slice(0, 2), 16),
+      g: parseInt(h.slice(2, 4), 16),
+      b: parseInt(h.slice(4, 6), 16)
+    };
+  }
+
+  function normalizeAccentHex(hex) {
+    var triplet = hexToRgbForAccent(hex);
+    if (!triplet) return null;
+    function pad2(n) {
+      var s = Number(n).toString(16);
+      return s.length < 2 ? "0" + s : s;
+    }
+    return "#" + pad2(triplet.r) + pad2(triplet.g) + pad2(triplet.b);
+  }
+
+  function setAccentColor(hex) {
+    var normalized = normalizeAccentHex(hex);
+    if (!normalized) normalized = DEFAULT_ACCENT_HEX;
+    var triplet = hexToRgbForAccent(normalized);
+    if (!triplet) triplet = hexToRgbForAccent(DEFAULT_ACCENT_HEX);
+    var root = document.documentElement;
+    root.style.setProperty("--accent-color", normalized);
+    root.style.setProperty("--accent-rgb", triplet.r + ", " + triplet.g + ", " + triplet.b);
+    root.style.setProperty("--3d-light", "rgba(" + triplet.r + ", " + triplet.g + ", " + triplet.b + ", 0.2)");
     try {
-      localStorage.setItem(STAGETIME_THEME_KEY, name);
+      localStorage.setItem(STAGETIME_ACCENT_KEY, normalized);
     } catch (e) {}
-    var select = document.getElementById("settings-theme-select");
-    if (select && select.value !== name) {
-      select.value = name;
-    }
+    var colorInput = document.getElementById("settings-accent-color");
+    if (colorInput && colorInput.value !== normalized) colorInput.value = normalized;
     updateThemeColorMeta();
   }
 
-  function applySavedTheme() {
-    var saved;
+  function initAccent() {
+    var saved = "";
     try {
-      saved = localStorage.getItem(STAGETIME_THEME_KEY);
+      saved = localStorage.getItem(STAGETIME_ACCENT_KEY) || "";
     } catch (e) {}
-    updateAppTheme(saved || "default");
+    try {
+      localStorage.removeItem("stagetime_theme");
+    } catch (e2) {}
+    if (saved) setAccentColor(saved);
+    else setAccentColor(DEFAULT_ACCENT_HEX);
   }
 
-  function initTheme() {
-    applySavedTheme();
+  function bindSettingsAccentControl() {
+    var colorInput = document.getElementById("settings-accent-color");
+    if (!colorInput || colorInput.dataset.accentBound === "1") return;
+    colorInput.dataset.accentBound = "1";
+    var current = "";
+    try {
+      current = localStorage.getItem(STAGETIME_ACCENT_KEY) || "";
+    } catch (e) {}
+    if (current) {
+      var norm = normalizeAccentHex(current);
+      if (norm) colorInput.value = norm;
+    }
+    colorInput.addEventListener("input", function () {
+      setAccentColor(colorInput.value);
+    });
   }
 
   function showSettingsView(view) {
@@ -633,6 +730,93 @@
     var importExportView = document.getElementById("settings-view-import-export");
     if (dashboard) dashboard.classList.toggle("hidden", view !== "dashboard");
     if (importExportView) importExportView.classList.toggle("hidden", view !== "import-export");
+  }
+
+  function getDashboardSlicerStatus() {
+    var activePill = document.querySelector("#status-slicer .slicer-pill.active");
+    var raw = activePill && activePill.getAttribute("data-status") ? String(activePill.getAttribute("data-status")).trim().toLowerCase() : "all";
+    if (raw === "active" || raw === "draft") return raw;
+    return "all";
+  }
+
+  function initHomeStatusSlicer() {
+    var slicer = document.getElementById("status-slicer");
+    if (!slicer || slicer.dataset.slicerBound === "1") return;
+    slicer.dataset.slicerBound = "1";
+    slicer.addEventListener("click", function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest(".slicer-pill[data-status]") : null;
+      if (!btn || !slicer.contains(btn)) return;
+      slicer.querySelectorAll(".slicer-pill").forEach(function (p) { p.classList.remove("active"); });
+      btn.classList.add("active");
+      updateDashboardStats();
+    });
+  }
+
+  function formatDashboardRuntime(totalSeconds) {
+    var t = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+    var m = Math.floor(t / 60);
+    var s = t % 60;
+    var mm = m < 10 ? "0" + m : String(m);
+    var ss = s < 10 ? "0" + s : String(s);
+    return mm + ":" + ss;
+  }
+
+  function sumJokeRuntimeSeconds(jokes) {
+    if (!Array.isArray(jokes)) return 0;
+    var sum = 0;
+    for (var i = 0; i < jokes.length; i++) {
+      var raw = jokes[i] && jokes[i].duration;
+      var n = raw != null && raw !== "" ? Number(raw) : 0;
+      if (typeof n === "number" && !isNaN(n) && isFinite(n) && n > 0) sum += Math.floor(n);
+    }
+    return sum;
+  }
+
+  function updateDashboardStats() {
+    var jokesEl = document.getElementById("dash-stat-jokes");
+    var runtimeEl = document.getElementById("dash-stat-runtime");
+    var ideasEl = document.getElementById("dash-stat-ideas");
+    var setsEl = document.getElementById("dash-stat-sets");
+    if (!jokesEl && !runtimeEl && !ideasEl && !setsEl) return;
+    function nTxt(n) {
+      return String(Math.max(0, Math.floor(Number(n) || 0)));
+    }
+    if (!dataLayer) {
+      if (jokesEl) jokesEl.textContent = "0";
+      if (runtimeEl) runtimeEl.textContent = formatDashboardRuntime(0);
+      if (ideasEl) ideasEl.textContent = "0";
+      if (setsEl) setsEl.textContent = "0";
+      return;
+    }
+    Promise.all([
+      dataLayer.listJokes().catch(function () { return []; }),
+      dataLayer.listIdeas().catch(function () { return []; }),
+      dataLayer.listSets().catch(function () { return []; })
+    ]).then(function (results) {
+      var jokeRows = Array.isArray(results[0]) ? results[0] : [];
+      var ideasRows = Array.isArray(results[1]) ? results[1] : [];
+      var setsRows = Array.isArray(results[2]) ? results[2] : [];
+      var jokesOnly = jokeRows.filter(function (j) {
+        var typRaw = j != null && j.type != null ? String(j.type) : "";
+        var typ = typRaw !== "" ? typRaw : "joke";
+        return typ === "joke";
+      });
+      var sliceMode = getDashboardSlicerStatus();
+      if (sliceMode === "active") {
+        jokesOnly = jokesOnly.filter(function (j) { return j && String(j.status || "") === "active"; });
+      } else if (sliceMode === "draft") {
+        jokesOnly = jokesOnly.filter(function (j) { return j && String(j.status || "") === "draft"; });
+      }
+      if (jokesEl) jokesEl.textContent = nTxt(jokesOnly.length);
+      if (runtimeEl) runtimeEl.textContent = formatDashboardRuntime(sumJokeRuntimeSeconds(jokesOnly));
+      if (ideasEl) ideasEl.textContent = nTxt(ideasRows.length);
+      if (setsEl) setsEl.textContent = nTxt(setsRows.length);
+    }).catch(function () {
+      if (jokesEl) jokesEl.textContent = "0";
+      if (runtimeEl) runtimeEl.textContent = formatDashboardRuntime(0);
+      if (ideasEl) ideasEl.textContent = "0";
+      if (setsEl) setsEl.textContent = "0";
+    });
   }
 
   function getJokeListEl() { return document.getElementById("joke-list"); }
@@ -680,8 +864,6 @@
     var detailEl = getJokeDetailEl();
     var jokesListFolder = document.getElementById("panel-jokes-list");
     var controlsEl = getJokeControlsEl();
-    var panel = detailEl ? detailEl.closest(".panel") : getJokesPanelEl();
-    var panelCloseBtn = panel ? panel.querySelector(".panel-close-btn") : null;
     var modalContainer = document.getElementById("modal-container");
 
     if (isDetailVisible) {
@@ -698,7 +880,6 @@
       if (controlsEl) controlsEl.classList.remove("hidden");
       setJokesPanelHeaderListMode();
     }
-    if (panelCloseBtn) panelCloseBtn.style.display = isDetailVisible ? "none" : "";
     if (isDetailVisible) setJokesNavHeaderRowVisible(false);
     else setJokesNavHeaderRowVisible(true);
     if (modalContainer) {
@@ -840,9 +1021,10 @@
     el.className = "slab-item idea-slab idea-item";
     el.setAttribute("role", "listitem");
     el.dataset.id = idea.id != null ? String(idea.id) : "";
-    el.addEventListener("click", function () {
-      showIdeaDetail(idea.id);
-    });
+    var ideaIdNum = idea && idea.id != null ? Number(idea.id) : NaN;
+    if (Number.isFinite(ideaIdNum)) {
+      el.setAttribute("onclick", "window.showIdeaDetail(" + ideaIdNum + ")");
+    }
     var tTitle = idea.title != null ? String(idea.title) : "";
     var tPrem = idea.premise != null ? String(idea.premise) : "";
     var tContent = idea.content != null ? String(idea.content) : "";
@@ -958,9 +1140,11 @@
             topicEl.appendChild(opt);
           });
           renderJokeList(optionalSelectJokeId);
+          updateDashboardStats();
         });
       }
       renderJokeList(optionalSelectJokeId);
+      updateDashboardStats();
     }).catch(function () {
       jokesListCache = [];
       var listEl = getJokeListEl();
@@ -974,6 +1158,7 @@
       if (listHeaderEl) listHeaderEl.classList.remove("hidden");
       var toolbarEl = getJokesToolbarEl();
       if (toolbarEl) toolbarEl.classList.remove("hidden");
+      updateDashboardStats();
     });
   }
 
@@ -1022,23 +1207,31 @@
 
   function applyModalContentTypeClass(type, item) {
     var modalContainer = document.getElementById("modal-container");
-    if (!modalContainer) return;
-    modalContainer.classList.remove("modal-joke", "modal-idea");
-    if (type === "joke") {
-      modalContainer.classList.add("modal-joke");
-      return;
+    var ideasPanel = document.getElementById("panel-ideas");
+    if (ideasPanel) {
+      ideasPanel.classList.toggle("modal-idea", type === "idea");
     }
-    if (type === "idea") {
-      modalContainer.classList.add("modal-idea");
-      return;
-    }
-    if (!item || typeof item !== "object") return;
-    if (item.premise != null && item.type !== "idea") {
-      modalContainer.classList.add("modal-joke");
-      return;
-    }
-    if (item.content != null) {
-      modalContainer.classList.add("modal-idea");
+    if (modalContainer) {
+      modalContainer.classList.remove("modal-joke", "modal-idea");
+      if (type === "joke") {
+        modalContainer.classList.add("modal-joke");
+        return;
+      }
+      if (type === "idea") {
+        var udc = document.getElementById("universal-detail-content");
+        if (udc && modalContainer.contains(udc)) {
+          modalContainer.classList.add("modal-idea");
+        }
+        return;
+      }
+      if (!item || typeof item !== "object") return;
+      if (item.premise != null && item.type !== "idea") {
+        modalContainer.classList.add("modal-joke");
+        return;
+      }
+      if (item.content != null) {
+        modalContainer.classList.add("modal-idea");
+      }
     }
   }
 
@@ -1055,7 +1248,7 @@
     var el = opts.el;
     if (!el) {
       if (type === "joke") el = getJokeDetailEl();
-      else if (type === "idea") el = document.getElementById("universal-detail-content");
+      else if (type === "idea") el = getIdeaDetailEl();
       else el = getIdeaDetailEl();
     }
     if (!el) return;
@@ -1074,11 +1267,10 @@
         "<div class=\"joke-master-footer ribbon\">" +
         "<div class=\"joke-master-ribbon-row\">" +
         "<div class=\"joke-master-ribbon-actions\">" +
-        "<button type=\"button\" id=\"joke-back-btn\" class=\"slab-button\">&lt;</button>" +
-        "<button type=\"button\" id=\"joke-detail-save-btn\" class=\"slab-button btn-save-joke\">SAVE</button>" +
-        "<button type=\"button\" class=\"slab-button btn-set-trigger\" onclick=\"window.openSetPicker(currentJokeId, 'joke')\"><i class=\"icon-plus\"></i> + Set</button>" +
-        "<button type=\"button\" id=\"joke-detail-more-btn\" class=\"slab-button btn-more-options\">+/-</button>" +
-        "<button type=\"button\" id=\"joke-delete-btn\" class=\"slab-button delete-btn" + (hideDelete ? " hidden" : "") + "\">DEL</button>" +
+        "<button type=\"button\" id=\"joke-back-btn\" class=\"slab-button detail-modal-close-btn\" onclick=\"window.closeModal(event)\" aria-label=\"Close\">×</button>" +
+        "<button type=\"button\" class=\"slab-button btn-set-trigger\" onclick=\"window.openSetPicker(currentJokeId, 'joke')\">+SET</button>" +
+        "<button type=\"button\" id=\"joke-detail-save-btn\" class=\"slab-button btn-save-joke\">Save</button>" +
+        "<button type=\"button\" id=\"joke-delete-btn\" class=\"slab-button delete-btn" + (hideDelete ? " hidden" : "") + "\" onclick=\"window.deleteCurrentItem()\">DEL</button>" +
         "</div>" +
         "<div id=\"joke-admin-fields\" class=\"lab-accordion hidden joke-master-admin-below-actions\">" +
         "<div class=\"joke-admin-fields-row\">" +
@@ -1106,7 +1298,11 @@
         "<input type=\"text\" id=\"joke-edit-tags\" class=\"live-edit-field joke-master-tags\" list=\"tag-datalist\" value=\"\"></div>" +
         "</div>" +
         "<div class=\"modal-form-row\"><p class=\"detail-label\">Notes</p><textarea id=\"joke-edit-setup_notes\" class=\"live-edit-field\" rows=\"2\"></textarea></div>" +
-        "</div></div></div></div></div>";
+        "</div>" +
+        "<div class=\"joke-master-admin-toggle-row\">" +
+        "<button type=\"button\" id=\"joke-detail-more-btn\" class=\"slab-button btn-more-options\">+/-</button>" +
+        "</div>" +
+        "</div></div></div></div>";
 
       var j = data;
       var parts = splitJokeActOutPunchline(j.punchline);
@@ -1142,14 +1338,20 @@
     } else if (type === "idea") {
       var item = data;
       var ideaId = item.id != null ? Number(item.id) : null;
+      var contentPane = el || getIdeaDetailEl();
+      if (!contentPane) return;
       var modalContainer = document.getElementById("modal-container");
-      var contentPane = document.getElementById("universal-detail-content");
-      if (!modalContainer || !contentPane) return;
-      modalContainer._currentIdea = item;
-      modalContainer.style.display = "flex";
-      modalContainer.classList.add("is-detail-view");
-      modalContainer.classList.remove("hidden");
-      modalContainer.setAttribute("aria-hidden", "false");
+      var ideasPanelEl = document.getElementById("panel-ideas");
+      contentPane._currentIdea = item;
+      if (ideasPanelEl) ideasPanelEl._currentIdea = item;
+      if (modalContainer) modalContainer._currentIdea = item;
+      var udcLegacy = document.getElementById("universal-detail-content");
+      if (modalContainer && udcLegacy && modalContainer.contains(udcLegacy)) {
+        modalContainer.style.display = "flex";
+        modalContainer.classList.add("is-detail-view");
+        modalContainer.classList.remove("hidden");
+        modalContainer.setAttribute("aria-hidden", "false");
+      }
       var ideaTitleStr = item.title != null ? String(item.title) : "";
       var ideaTitleHeading = ideaTitleStr.trim() !== "" ? ideaTitleStr : "Untitled Idea";
       var ideaBodyStr =
@@ -1165,10 +1367,10 @@
         `<div class="modal-form-row"><p class="detail-label">Content</p><textarea id="idea-focus-content" class="live-edit-field" rows="7">${escapeHtml(ideaBodyStr)}</textarea></div>` +
         `<div class="modal-form-row"><p class="detail-label">Notes</p><textarea id="idea-focus-notes" class="live-edit-field" rows="4">${escapeHtml(ideaNotesStr)}</textarea></div>` +
         `<div class="silo-footer-actions">` +
-        `<button type="button" class="silo-slab" onclick="window.saveIdea(${ideaId != null && !isNaN(ideaId) ? String(ideaId) : "null"})">SAVE</button>` +
+        `<button type="button" class="silo-slab detail-modal-close-btn" onclick="window.closeModal(event)" aria-label="Close">×</button>` +
         `<button type="button" class="silo-slab" onclick="window.openSetPicker(${ideaId != null && !isNaN(ideaId) ? String(ideaId) : "null"}, 'idea')">+SET</button>` +
-        `<button type="button" class="silo-slab" onclick="window.closeModal()">←</button>` +
-        `<button type="button" class="silo-slab silo-btn-danger" onclick="window.deleteIdea(${ideaId != null && !isNaN(ideaId) ? String(ideaId) : "null"})">DEL</button>` +
+        `<button type="button" class="silo-slab" onclick="window.saveIdea(${ideaId != null && !isNaN(ideaId) ? String(ideaId) : "null"})">Save</button>` +
+        `<button type="button" class="silo-slab silo-btn-danger" onclick="window.deleteCurrentItem()">DEL</button>` +
         `</div>` +
         `<button type="button" id="idea-detail-btn-convert" class="convert-joke-trigger silo-slab">CONVERT TO JOKE</button>` +
         `</div>` +
@@ -1227,12 +1429,15 @@
     }
     el._returnToJokeList = restoreJokesChrome;
 
-    document.getElementById("joke-back-btn").addEventListener("click", function () {
-      restoreJokesChrome();
-      clearPendingConversion();
-      openModal("ideas");
-      returnToIdeaList();
-    });
+    var jokeBackConv = document.getElementById("joke-back-btn");
+    if (jokeBackConv) {
+      jokeBackConv.onclick = function () {
+        restoreJokesChrome();
+        clearPendingConversion();
+        openModal("ideas");
+        returnToIdeaList();
+      };
+    }
 
     var moreBtnConv = document.getElementById("joke-detail-more-btn");
     if (moreBtnConv) moreBtnConv.addEventListener("click", function () { toggleJokeAdmin(); });
@@ -1366,26 +1571,11 @@
               saveBtn.textContent = "Saved! ✓";
               window.setTimeout(function () {
                 saveBtn.classList.remove("btn-save-success");
-                saveBtn.textContent = "SAVE";
+                saveBtn.textContent = "Save";
               }, 1500);
             })
             .catch(function () {});
         });
-        el.querySelector("#joke-delete-btn").addEventListener("click", function () {
-          if (!confirm("Delete this joke? This cannot be undone.")) return;
-          var jokeId = getJokeDetailEl().dataset.jokeId;
-          (dataLayer ? dataLayer.deleteJoke(jokeId) : apiFetch("/jokes/" + jokeId, { method: "DELETE" }))
-            .then(function (r) {
-              if (r && r.ok === false) throw new Error("Delete failed");
-              returnToJokeList();
-              loadJokes();
-            })
-            .catch(function () {});
-        });
-        el.querySelector("#joke-back-btn").addEventListener("click", function () {
-          returnToJokeList();
-        });
-
         var moreBtn = document.getElementById("joke-detail-more-btn");
         if (moreBtn) moreBtn.addEventListener("click", function () { toggleJokeAdmin(); });
 
@@ -1418,6 +1608,8 @@
   }
 
   function loadSets() {
+    var panelSetsGate = document.getElementById("panel-sets");
+    if (!panelSetsGate || panelSetsGate.classList.contains("hidden")) return;
     var setDetailEl = getSetDetailEl();
     var currentSetId = setDetailEl && !setDetailEl.classList.contains("hidden") && setDetailEl.dataset.setId ? setDetailEl.dataset.setId : null;
     (dataLayer ? dataLayer.listSets() : apiFetch("/sets").then(function (r) { return r.json(); }))
@@ -1425,11 +1617,13 @@
         if (!Array.isArray(list)) list = [];
         renderSetsList(list, currentSetId);
         schedulePanelFocus("new-set-title-input");
+        updateDashboardStats();
       })
       .catch(function () {
         returnToSetList();
         var el = getSetListEl();
         if (el) el.innerHTML = "<li class=\"empty\">Could not load sets. Is the server running?</li>";
+        updateDashboardStats();
       });
   }
 
@@ -1454,10 +1648,12 @@
         listEl.innerHTML = "";
         if (list.length === 0) {
           listEl.innerHTML = "<div class=\"list-empty\" role=\"status\">No ideas yet. Use the Add button above to create one.</div>";
+          updateDashboardStats();
           return filteredIdeas;
         }
         if (filteredIdeas.length === 0) {
-          listEl.innerHTML = "<div class=\"list-empty neon-text-blue\" role=\"status\">No matching ideas found...</div>";
+          listEl.innerHTML = "<div class=\"list-empty neon-text-blue\" role=\"status\">No matching ideas found.</div>";
+          updateDashboardStats();
           return filteredIdeas;
         }
         filteredIdeas.forEach(function (idea) {
@@ -1469,10 +1665,12 @@
         if (!isTypingField) {
           schedulePanelFocus("new-idea-title-input");
         }
+        updateDashboardStats();
         return filteredIdeas;
       })
       .catch(function () {
         listEl.innerHTML = "<div class=\"list-empty\" role=\"alert\">Could not load ideas. Is the server running?</div>";
+        updateDashboardStats();
         return [];
       });
   }
@@ -1496,9 +1694,10 @@
     document.getElementById("panel-ideas-list")?.classList.remove("hidden");
     var panel = document.getElementById("panel-ideas");
     if (panel) {
-      panel.classList.remove("hidden");
+      revealFolderLayer(panel);
       panel.classList.remove("is-detail-view");
       panel.classList.remove("is-viewing-detail");
+      panel.classList.remove("modal-idea");
     }
     setIdeasPanelTitle("IDEAS");
     var listEl = getIdeaListEl();
@@ -1575,15 +1774,21 @@
       return;
     }
     document.getElementById("panel-ideas-list")?.classList.add("hidden");
+    var ideaDetailOpen = getIdeaDetailEl();
+    if (ideaDetailOpen) {
+      ideaDetailOpen.classList.remove("hidden");
+      ideaDetailOpen.style.display = "flex";
+    }
     var mc = document.getElementById("modal-container");
-    if (mc) {
+    var udcMc = document.getElementById("universal-detail-content");
+    if (mc && udcMc && mc.contains(udcMc)) {
       mc.classList.add("is-detail-view");
       mc.classList.remove("hidden");
       mc.setAttribute("aria-hidden", "false");
     }
     var panel = document.getElementById("panel-ideas");
     if (panel) {
-      panel.classList.add("hidden");
+      revealFolderLayer(panel);
       panel.classList.add("is-detail-view");
       panel.classList.add("is-viewing-detail");
     }
@@ -1604,11 +1809,18 @@
 
     var panel = document.getElementById("panel-ideas");
     if (panel) {
-      panel.classList.remove("hidden");
+      revealFolderLayer(panel);
       panel.classList.remove("is-viewing-detail");
       panel.classList.remove("is-detail-view");
+      panel.classList.remove("modal-idea");
     }
     document.getElementById("panel-ideas-list")?.classList.remove("hidden");
+    var ideaDetCloseIdea = getIdeaDetailEl();
+    if (ideaDetCloseIdea) {
+      ideaDetCloseIdea.classList.add("hidden");
+      ideaDetCloseIdea.innerHTML = "";
+      ideaDetCloseIdea.style.display = "";
+    }
     setIdeasPanelTitle("IDEAS");
     var mc = document.getElementById("modal-container");
     if (mc) mc.classList.remove("is-detail-view");
@@ -1629,12 +1841,10 @@
     var listEl = getSetListEl();
     var detailEl = getSetDetailEl();
     var newFormEl = getSetsNewFormEl();
-    var panel = listEl ? listEl.closest(".panel") : null;
-    var closeBtn = panel ? panel.querySelector(".panel-close-btn") : null;
-    if (closeBtn) closeBtn.style.display = "";
     if (detailEl) detailEl.classList.add("hidden");
     window.currentSetId = null;
-    document.getElementById("panel-sets")?.classList.remove("hidden");
+    var setsPanelChrome = document.getElementById("panel-sets");
+    if (setsPanelChrome) revealFolderLayer(setsPanelChrome);
     document.getElementById("panel-sets-list")?.classList.remove("hidden");
     if (listEl) listEl.classList.remove("hidden");
     if (newFormEl) newFormEl.classList.remove("hidden");
@@ -2069,10 +2279,8 @@
         activeSetDetailItems = Array.isArray(items) ? items.slice() : [];
         window.activeSetDetailItems = activeSetDetailItems;
         var el = getSetDetailEl();
-        var panel = el.closest(".panel");
-        var panelCloseBtn = panel ? panel.querySelector(".panel-close-btn") : null;
-        if (panelCloseBtn) panelCloseBtn.style.display = "none";
         el.classList.remove("hidden");
+        revealFolderLayer(el);
         el.dataset.setId = id != null ? String(id) : "";
         window.currentSetId = id;
         el._setDetailPreferItemRefs = !!(payload.useItems && data.items != null);
@@ -2631,9 +2839,6 @@
         openModal(tab);
         if (tab === "ideas") {
           if (pendingConversionId && getJokeDetailEl() && getJokeDetailEl().dataset.jokeNewFromIdea === "1") {
-            var jPanel = getJokesPanelEl();
-            var jClose = jPanel ? jPanel.querySelector(".panel-close-btn") : null;
-            if (jClose) jClose.style.display = "";
             var jl = getJokeListEl();
             var jt = getJokesToolbarEl();
             if (jl) jl.style.display = "";
@@ -2675,9 +2880,6 @@
         renderIdeas(target ? target.value : "");
       });
     }
-    document.querySelectorAll(".panel-close-btn").forEach(function (btn) {
-      btn.addEventListener("click", function () { closeModal(); });
-    });
     var ideaBackToListBtn = document.getElementById("idea-back-to-list-btn");
     if (ideaBackToListBtn) ideaBackToListBtn.addEventListener("click", function () {
       returnToIdeaList();
@@ -2724,7 +2926,6 @@
     initJokesModalDelegation();
     initSetsPanelDelegation();
     fillDatalists();
-    initTheme();
     // Default to dashboard on load.
     showPanel("panel-dashboard");
   }
@@ -2910,35 +3111,36 @@
   }
 
   function initModals() {
-    var ideaDetailModal = document.getElementById("modal-container");
+    var ideaModalBackdrop = document.getElementById("modal-container");
     /* Enable click-outside-to-close for quick discard/exit behavior. */
-    if (ideaDetailModal && !ideaDetailModal.dataset.backdropCloseWired) {
-      ideaDetailModal.dataset.backdropCloseWired = "1";
-      ideaDetailModal.addEventListener("click", function (e) {
-        if (e.target === ideaDetailModal && !ideaDetailModal.classList.contains("is-detail-view")) closeModal();
+    if (ideaModalBackdrop && !ideaModalBackdrop.dataset.backdropCloseWired) {
+      ideaModalBackdrop.dataset.backdropCloseWired = "1";
+      ideaModalBackdrop.addEventListener("click", function (e) {
+        if (e.target === ideaModalBackdrop && !ideaModalBackdrop.classList.contains("is-detail-view")) closeModal();
       });
     }
-    /* Idea detail DOM is rebuilt per open; delegate actions to the modal shell. */
-    if (ideaDetailModal && !ideaDetailModal.dataset.ideaActionsDelegated) {
-      ideaDetailModal.dataset.ideaActionsDelegated = "1";
-      ideaDetailModal.addEventListener("keydown", function (e) {
+    /* Idea detail DOM is rebuilt per open; delegate to #modal-container or #panel-ideas (in-panel #idea-detail). */
+    var ideaActionShell = ideaModalBackdrop || document.getElementById("panel-ideas");
+    if (ideaActionShell && !ideaActionShell.dataset.ideaActionsDelegated) {
+      ideaActionShell.dataset.ideaActionsDelegated = "1";
+      ideaActionShell.addEventListener("keydown", function (e) {
         var valueBtn = e.target && e.target.closest ? e.target.closest(".idea-detail-value[data-action=\"edit-idea-field\"]") : null;
-        if (!valueBtn || !ideaDetailModal.contains(valueBtn)) return;
+        if (!valueBtn || !ideaActionShell.contains(valueBtn)) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          openIdeaFieldEditor(ideaDetailModal, valueBtn.getAttribute("data-field"));
+          openIdeaFieldEditor(ideaActionShell, valueBtn.getAttribute("data-field"));
         }
       });
-      ideaDetailModal.addEventListener("click", function (e) {
+      ideaActionShell.addEventListener("click", function (e) {
         var btn = e.target && e.target.closest ? e.target.closest("button") : null;
         var valueBtn = e.target && e.target.closest ? e.target.closest(".idea-detail-value[data-action=\"edit-idea-field\"]") : null;
-        if (valueBtn && ideaDetailModal.contains(valueBtn)) {
-          openIdeaFieldEditor(ideaDetailModal, valueBtn.getAttribute("data-field"));
+        if (valueBtn && ideaActionShell.contains(valueBtn)) {
+          openIdeaFieldEditor(ideaActionShell, valueBtn.getAttribute("data-field"));
           return;
         }
-        if (!btn || !ideaDetailModal.contains(btn)) return;
+        if (!btn || !ideaActionShell.contains(btn)) return;
         if (btn.id === "idea-detail-btn-convert") {
-          var curCv = ideaDetailModal._currentIdea;
+          var curCv = ideaActionShell._currentIdea;
           if (!curCv) return;
           setPendingConversion(curCv);
           closeIdeaDetailModal();
@@ -2947,7 +3149,7 @@
           return;
         }
         if (btn.getAttribute("data-action") === "update-idea-field") {
-          var idea = ideaDetailModal._currentIdea;
+          var idea = ideaActionShell._currentIdea;
           if (!idea) return;
           var field = btn.getAttribute("data-field");
           if (!field) return;
@@ -2971,8 +3173,8 @@
               } else {
                 idea[field] = parsedValue;
               }
-              ideaDetailModal._currentIdea = idea;
-              var titleEl = ideaDetailModal.querySelector("#modal-idea-title");
+              ideaActionShell._currentIdea = idea;
+              var titleEl = ideaActionShell.querySelector("#modal-idea-title");
               if (titleEl) titleEl.textContent = formatIdeaFieldDisplayValue(idea, "title");
               setIdeasPanelTitle(formatIdeaFieldDisplayValue(idea, "title"));
               var displayEl = row ? row.querySelector(".idea-detail-value") : null;
@@ -2983,7 +3185,7 @@
                 btn.disabled = false;
                 btn.textContent = originalText || "Update";
                 btn.classList.remove("btn-save-success");
-                closeIdeaFieldEditor(ideaDetailModal, field);
+                closeIdeaFieldEditor(ideaActionShell, field);
               }, 1200);
               var listLi = getIdeaListEl() && getIdeaListEl().querySelector(".idea-item[data-id=\"" + String(idea.id) + "\"]");
               if (listLi) {
@@ -3280,40 +3482,33 @@
   }
 
   function runWhenReady() {
-    var savedTheme = "default";
-    try {
-      savedTheme = localStorage.getItem(STAGETIME_THEME_KEY) || "default";
-    } catch (e) {}
-    updateAppTheme(savedTheme);
+    initAccent();
+    bindSettingsAccentControl();
     initAuthForm();
-    initTheme();
-    var themeSelect = document.getElementById("settings-theme-select");
-    if (themeSelect && themeSelect.dataset.themeBound !== "1") {
-      themeSelect.dataset.themeBound = "1";
-      themeSelect.value = savedTheme;
-      themeSelect.addEventListener("change", function () {
-        updateAppTheme(this.value);
-      });
-    }
     try { localStorage.setItem("stagetime_storage", "local"); } catch (e) {}
     var appShell = document.getElementById("app-container");
     if (appShell) appShell.classList.remove("hidden");
     window.addEventListener("stagetime-401", showAuthShell);
     var navPillReady = document.getElementById("nav-command-pill");
-    if (navPillReady) navPillReady.classList.remove("nav-active");
-    var setsPanelReady = document.getElementById("panel-sets");
-    if (setsPanelReady) {
-      setsPanelReady.style.display = "none";
-      setsPanelReady.classList.remove("active");
-      setsPanelReady.classList.add("hidden");
+    if (navPillReady) {
+      navPillReady.classList.add("nav-active");
+      navPillReady.style.display = "flex";
     }
+    globalHideFolderLayers();
+    var panelHomeReady = document.getElementById("panel-home");
+    if (panelHomeReady) {
+      panelHomeReady.classList.remove("hidden");
+      panelHomeReady.style.display = "flex";
+    }
+    initHomeStatusSlicer();
     initApp();
     initUpdateCheck();
     loadJokes();
     setTimeout(function () {
       closeModal();
-      if (setsPanelReady) setsPanelReady.style.display = "";
+      updateDashboardStats();
     }, 50);
+    updateNavActiveState("home");
   }
 
   function saveIdea(id) {
@@ -3340,7 +3535,11 @@
       notes: notes
     }).then(function (updated) {
       var modalContainer = document.getElementById("modal-container");
+      var ideasPanelSave = document.getElementById("panel-ideas");
+      var ideaDetSave = document.getElementById("idea-detail");
       if (modalContainer && updated) modalContainer._currentIdea = updated;
+      if (ideasPanelSave && updated) ideasPanelSave._currentIdea = updated;
+      if (ideaDetSave && updated) ideaDetSave._currentIdea = updated;
       setIdeasPanelTitle(title);
       loadIdeas();
       closeModal();
@@ -3521,7 +3720,27 @@
   window.showPanel = showPanel;
   window.goHome = function () {
     closeModal();
-    showPanel("home");
+    globalHideFolderLayers();
+    document.querySelectorAll('[id^="modal-detail-"], #set-picker-modal').forEach(function (el) {
+      el.classList.remove("active");
+      el.classList.add("hidden");
+    });
+    var panelHome = document.getElementById("panel-home");
+    if (panelHome) {
+      panelHome.classList.remove("hidden");
+      panelHome.style.display = "flex";
+    }
+    document.querySelectorAll(".hub-drawer[data-folder]").forEach(function (b) {
+      b.classList.remove("active");
+    });
+    if (document.body) document.body.classList.remove("panel-open");
+    var navPillGo = document.getElementById("nav-command-pill");
+    if (navPillGo) {
+      navPillGo.classList.add("nav-active");
+      navPillGo.style.display = "flex";
+    }
+    updateNavActiveState("home");
+    window.scrollTo(0, 0);
   };
   window.setJokesDetailVisibility = setJokesDetailVisibility;
   window.loadJokes = loadJokes;
@@ -3532,6 +3751,45 @@
   };
   window.fetchJokesForModal = fetchJokesForModal;
   window.saveIdea = saveIdea;
+  window.deleteCurrentItem = function () {
+    var modalContainer = document.getElementById("modal-container");
+    var ideasPanelDel = document.getElementById("panel-ideas");
+    var ideaShell =
+      modalContainer &&
+      modalContainer.classList.contains("modal-idea") &&
+      modalContainer.classList.contains("is-detail-view")
+        ? modalContainer
+        : ideasPanelDel &&
+            ideasPanelDel.classList.contains("modal-idea") &&
+            ideasPanelDel.classList.contains("is-viewing-detail")
+          ? ideasPanelDel
+          : null;
+    if (ideaShell) {
+      var item = ideaShell._currentIdea;
+      var ideaId = item && item.id != null ? Number(item.id) : null;
+      if (ideaId == null || isNaN(ideaId)) return;
+      if (!confirm("Delete this idea?")) return;
+      deleteIdeaRequest(ideaId);
+      closeIdeaDetailModal();
+      return;
+    }
+    var jokeEl = getJokeDetailEl();
+    if (!jokeEl || jokeEl.classList.contains("hidden")) return;
+    if (jokeEl.dataset.jokeNewFromIdea === "1") return;
+    var delBtn = jokeEl.querySelector("#joke-delete-btn");
+    if (delBtn && delBtn.classList.contains("hidden")) return;
+    var jokeIdRaw = jokeEl.dataset.jokeId;
+    var jokeId = jokeIdRaw != null ? String(jokeIdRaw).trim() : "";
+    if (jokeId === "") return;
+    if (!confirm("Delete this joke? This cannot be undone.")) return;
+    (dataLayer ? dataLayer.deleteJoke(jokeId) : apiFetch("/jokes/" + jokeId, { method: "DELETE" }))
+      .then(function (r) {
+        if (r && r.ok === false) throw new Error("Delete failed");
+        clearJokeDetailAndBack(jokeEl, modalContainer);
+        loadJokes();
+      })
+      .catch(function () {});
+  };
   window.deleteIdea = function (ideaId) {
     if (ideaId == null || !confirm("Delete this idea?")) return;
     deleteIdeaRequest(ideaId);
@@ -3551,6 +3809,8 @@
   };
   window.handleRibbonAction = handleRibbonAction;
   window.showToast = showToast;
+  window.setAccentColor = setAccentColor;
+  window.updateDashboardStats = updateDashboardStats;
 
   window.toggleEditSetOrder = toggleEditSetOrder;
   window.startStagetimeMode = startStagetimeMode;

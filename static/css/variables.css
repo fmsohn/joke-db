@@ -5,6 +5,7 @@
   --accent-color: #00d2ff;
   --accent-dark: #003e4d;
   --app-bg: #050505;
+  --bg-app: var(--app-bg);
   --3d-light: rgba(0, 210, 255, 0.2);
   --accent-rgb: 0, 210, 255;
   --theme-color: var(--app-bg);
@@ -12,6 +13,8 @@
   /* Workstation structural tokens (from workstation layer) */
   --panel-bg: #0a0a0a;
   --bg-panel: #0a0a0a;
+  --bg-card: var(--bg-panel);
+  --border-color: rgba(255, 255, 255, 0.12);
   /* Raised slab fill (expanded joke actions, etc.) */
   --slab-physics-bg: #111111;
   --error-red: #ff4d4d;
@@ -47,44 +50,15 @@
   --shadow-card: 0 6px 12px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.35);
   --breakpoint-mobile: 768px;
 
-  /* Layer stack: detail modal, then set picker, then slicer / nav */
+  /* Layer stack: detail modal, then nav pill (above app shell), then set picker / overlays */
   --panel-height: 50px;
   --z-modal-container: 9000;
-  --z-set-picker: 10005;
   --z-slicer-stack: 10001;
-  --z-nav-pill-stack: 10002;
+  --z-nav-pill-stack: 10006;
+  --z-set-picker: 10010;
 }
 
-/* FSU: matches body.fsu / body.theme-fsu (see updateAppTheme in app.js) */
-body.fsu,
-body.theme-fsu {
-  --accent-color: #ffd700;
-  --accent-dark: #700000;
-  --app-bg: #782f40;
-  --3d-light: rgba(255, 215, 0, 0.2);
-  --accent-rgb: 255, 215, 0;
-}
-
-/* UT: matches body.ut / body.theme-ut */
-body.ut,
-body.theme-ut {
-  --accent-color: #ff8200;
-  --accent-dark: #331100;
-  --app-bg: #bf5700;
-  --3d-light: rgba(255, 130, 0, 0.2);
-  --accent-rgb: 255, 130, 0;
-}
-
-/* documentElement reads --theme-color for meta[name="theme-color"]; vars live on body otherwise */
-:root:has(body.fsu),
-:root:has(body.theme-fsu) {
-  --theme-color: #782f40;
-}
-
-:root:has(body.ut),
-:root:has(body.theme-ut) {
-  --theme-color: #bf5700;
-}
+/* Accent is driven by window.setAccentColor (CSS vars on :root). */
 
 /* Discovery slicer pane */
 #discovery-slab .filter-row {
@@ -198,16 +172,7 @@ html body #modal-container {
   margin-top: var(--panel-height, 50px);
 }
 
-html body #nav-command-pill {
-  z-index: var(--z-nav-pill-stack, 10002);
-}
-
-html body .nav-pill-btn {
-  position: relative;
-  z-index: var(--z-nav-pill-stack, 10002);
-}
-
-/* Set picker (+SET): above #modal-container, below slicer and nav pill */
+/* Set picker (+SET): above nav pill and #modal-container */
 #set-picker-modal {
   position: fixed;
   inset: 0;
@@ -216,7 +181,7 @@ html body .nav-pill-btn {
   justify-content: center;
   box-sizing: border-box;
   padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
-  z-index: 10005;
+  z-index: var(--z-set-picker, 10010);
 }
 
 #set-picker-modal:not(.hidden) {
@@ -226,14 +191,30 @@ html body .nav-pill-btn {
 #set-picker-overlay {
   position: absolute;
   inset: 0;
-  z-index: 10005;
+  z-index: var(--z-set-picker, 10010);
   background: rgba(0, 0, 0, 0.8);
   pointer-events: auto;
 }
 
 #set-picker-modal .workstation-picker-panel {
   position: relative;
-  z-index: 10005;
+  z-index: var(--z-set-picker, 10010);
   pointer-events: auto;
   flex: 0 0 auto;
+}
+
+/* Home hub anchor (Step 4.1): centered column for logo + stats */
+#home-hub-v101 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+  padding-top: 20px;
+  gap: 15px;
+}
+
+.folder-layer.hidden {
+  display: none !important;
 }
