@@ -6,7 +6,7 @@
   var emptyStageMessageTimerId = null;
 
   /** Bumped with releases; pair with index.html ASSET_VERSION + sw.js for cache/SW refresh. */
-  window.STAGETIME_APP_VERSION = "2.3.5";
+  window.STAGETIME_APP_VERSION = "2.3.9";
   window.currentJokeId = null;
   window.currentSetId = null;
   // Cache-buster asset version: must match index.html ASSET_VERSION and ?v=... querystrings (Asset v101).
@@ -646,7 +646,7 @@
   }
 
   var STAGETIME_ACCENT_KEY = "stagetime_accent_hex";
-  var DEFAULT_ACCENT_HEX = "#00d2ff";
+  var DEFAULT_ACCENT_HEX = "#00f2ff";
 
   function updateThemeColorMeta() {
     var meta = document.querySelector('meta[name="theme-color"]');

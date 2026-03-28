@@ -179,7 +179,7 @@ body.stage-lock-active {
     grid-template-columns: 1fr 1fr;
     gap: 10px;
     width: 100%;
-    margin: 0.75rem 0 0.5rem;
+    margin: -15px 0 0.5rem;
 }
 
 .stat-tile {
@@ -259,18 +259,30 @@ body.stage-lock-active {
     margin-bottom: 0;
 }
 
+#panel-settings .panel-body.setting-controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
 .setting-controls .settings-accent-label {
     display: block;
-    margin-bottom: 8px;
+    margin-bottom: 0;
     font-size: 0.75rem;
     font-weight: 800;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--accent-color);
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .setting-controls .settings-accent-swatch {
-    width: 100%;
+    flex: 0 0 auto;
+    width: 72px;
+    max-width: min(120px, 45vw);
     height: 48px;
     padding: 4px;
     border: 2px solid var(--accent-color);
@@ -291,11 +303,19 @@ body.stage-lock-active {
 }
 
 /* --- 2. HOME HUB --- */
+#home-hub-v101,
+#home-pivot-hub {
+    gap: 0;
+    padding-top: calc(20px - 2vh);
+}
+
 .workstation-logo {
-    max-width: 280px;
-    height: auto;
-    margin: 1.5rem 0;
-    filter: drop-shadow(0 0 12px var(--accent-color));
+    width: 250px;
+    height: 200px;
+    object-fit: cover;
+    object-position: center;
+    margin-bottom: 0;
+    filter: drop-shadow(0 0 10px var(--accent-color));
 }
 
 #drawer-grid {
@@ -550,6 +570,7 @@ input#modal-idea-title.idea-detail-title:focus {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    flex-basis: 100%;
     width: 100%;
     margin-top: 12px;
 }
