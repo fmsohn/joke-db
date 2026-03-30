@@ -6,11 +6,11 @@
   var emptyStageMessageTimerId = null;
 
   /** Bumped with releases; pair with index.html ASSET_VERSION + sw.js for cache/SW refresh. */
-  window.STAGETIME_APP_VERSION = "2.3.9";
+  window.STAGETIME_APP_VERSION = "0.1.5";
   window.currentJokeId = null;
   window.currentSetId = null;
-  // Cache-buster asset version: must match index.html ASSET_VERSION and ?v=... querystrings (Asset v101).
-  var VERSION = typeof ASSET_VERSION !== "undefined" ? String(ASSET_VERSION) : "101";
+  // Cache-buster asset version: must match index.html ASSET_VERSION and ?v=... querystrings (Asset v105 / app 0.1.5).
+  var VERSION = typeof ASSET_VERSION !== "undefined" ? String(ASSET_VERSION) : "105";
   window.VERSION = VERSION;
   (function syncVersionFooter() {
     var el = document.getElementById("version-display");
@@ -19,6 +19,476 @@
 
   var API = "/api";
   var dataLayer = window.dataLayer;
+
+  let _cache = [];
+  let _filters = { status: "all", rating: "all", search: "", topic: "all" };
+  var _hubSearchDebounceTimer = null;
+  var _jokesSearchDebounceTimer = null;
+  let _pendingSourceIdeaId = null;
+
+  function normalizeMirrorRecord(row, typeHint) {
+    if (!row || typeof row !== "object") return null;
+    var t = typeHint != null ? typeHint : row.type;
+    t = t === "idea" ? "idea" : "joke";
+    var o = {};
+    var k;
+    for (k in row) {
+      if (Object.prototype.hasOwnProperty.call(row, k)) o[k] = row[k];
+    }
+    o.type = t;
+    var topicRaw = o.topic != null ? String(o.topic).trim() : "";
+    o.topic = topicRaw !== "" ? topicRaw : "Uncategorized";
+    o.tags = Array.isArray(o.tags) ? o.tags.slice() : [];
+    if (o.title == null) o.title = "";
+    if (t === "joke") {
+      if (o.content == null && o.premise != null) o.content = String(o.premise);
+      if (o.content == null) o.content = "";
+      var rat = o.rating != null ? Number(o.rating) : 0;
+      o.rating = rat >= 1 && rat <= 5 ? rat : 0;
+    } else {
+      if (o.content == null) o.content = "";
+    }
+    return o;
+  }
+
+  function getFilteredData() {
+    var list = Array.isArray(_cache) ? _cache.slice() : [];
+    var f = _filters;
+    var q = f.search != null ? String(f.search).trim().toLowerCase() : "";
+    return list.filter(function (item) {
+      if (!item) return false;
+      var typ = item.type === "idea" ? "idea" : "joke";
+      if (typ === "joke") {
+        if (f.status != null && f.status !== "all") {
+          if (String(item.status || "") !== String(f.status)) return false;
+        }
+        if (f.rating != null && f.rating !== "all") {
+          var r = item.rating != null ? Number(item.rating) : 0;
+          var ranked = r >= 1 && r <= 5;
+          if (f.rating === "unranked") {
+            if (ranked) return false;
+          } else {
+            var want = parseInt(String(f.rating), 10);
+            if (r !== want) return false;
+          }
+        }
+      }
+      if (f.topic != null && f.topic !== "all") {
+        var top = item.topic != null && String(item.topic).trim() !== "" ? String(item.topic).trim() : "Uncategorized";
+        if (top !== f.topic) return false;
+      }
+      if (q !== "") {
+        var title = item.title != null ? String(item.title).toLowerCase() : "";
+        var content = "";
+        if (typ === "joke") {
+          content =
+            (item.content != null ? String(item.content) : "") +
+            " " +
+            (item.act_out != null ? String(item.act_out) : "") +
+            " " +
+            (item.premise != null ? String(item.premise) : "") +
+            " " +
+            (item.punchline != null ? String(item.punchline) : "");
+        } else {
+          content = item.content != null ? String(item.content) : "";
+        }
+        content = content.trim().toLowerCase();
+        if (title.indexOf(q) < 0 && content.indexOf(q) < 0) return false;
+      }
+      return true;
+    });
+  }
+
+  function updateGlobalTagDatalistFromCache() {
+    var tagDl = document.getElementById("tag-datalist");
+    if (!tagDl) return;
+    var set = {};
+    (Array.isArray(_cache) ? _cache : []).forEach(function (item) {
+      var tags = item && item.tags;
+      if (!Array.isArray(tags)) return;
+      tags.forEach(function (t) {
+        var s = t != null ? String(t).trim() : "";
+        if (s) set[s.toLowerCase()] = s;
+      });
+    });
+    tagDl.innerHTML = "";
+    Object.keys(set)
+      .sort()
+      .forEach(function (key) {
+        var opt = document.createElement("option");
+        opt.value = set[key];
+        tagDl.appendChild(opt);
+      });
+  }
+
+  function countActiveSlicerFilters() {
+    var n = 0;
+    if (_filters.status != null && _filters.status !== "all") n++;
+    if (_filters.rating != null && _filters.rating !== "all") n++;
+    if (_filters.topic != null && _filters.topic !== "all") n++;
+    return n;
+  }
+
+  function updateJokesFiltersButtonLabel() {
+    var btn = document.getElementById("jokes-filters-btn");
+    if (!btn) return;
+    var c = countActiveSlicerFilters();
+    btn.textContent = c > 0 ? "FILTERS (" + c + ")" : "FILTERS";
+  }
+
+  function renderSlicerIntoHost(host, topicFromJokesOnly) {
+    if (!host) return;
+    host.innerHTML = "";
+    function makePill(label, kind, value, isActive) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "slicer-pill" + (isActive ? " active" : "");
+      b.setAttribute("data-slicer-kind", kind);
+      b.setAttribute("data-slicer-value", value);
+      b.textContent = label;
+      return b;
+    }
+    function addRow(title, kind, entries) {
+      var wrap = document.createElement("div");
+      wrap.className = "hub-slicer-row";
+      wrap.setAttribute("data-slicer-group", kind);
+      var lab = document.createElement("div");
+      lab.className = "hub-slicer-row-label";
+      lab.textContent = title;
+      wrap.appendChild(lab);
+      var chips = document.createElement("div");
+      chips.className = "hub-slicer-row-chips status-slicer";
+      entries.forEach(function (en) {
+        chips.appendChild(makePill(en.label, kind, en.value, _filters[kind] === en.value));
+      });
+      wrap.appendChild(chips);
+      host.appendChild(wrap);
+    }
+    var jokesInCache = (Array.isArray(_cache) ? _cache : []).filter(function (x) {
+      return x && x.type === "joke";
+    });
+    var statusOrder = ["draft", "testing", "active", "retired", "archived"];
+    var statusLabelMap = { draft: "DRAFT", testing: "TESTING", active: "ACTIVE", retired: "RETIRED", archived: "ARCHIVED" };
+    var statusSeen = {};
+    jokesInCache.forEach(function (j) {
+      var st = j.status != null && String(j.status).trim() !== "" ? String(j.status).trim() : "draft";
+      statusSeen[st] = true;
+    });
+    var statusEntries = [{ label: "ALL", value: "all" }];
+    statusOrder.forEach(function (st) {
+      if (statusSeen[st]) {
+        statusEntries.push({ label: statusLabelMap[st] || st.toUpperCase(), value: st });
+      }
+    });
+    Object.keys(statusSeen).forEach(function (st) {
+      if (statusOrder.indexOf(st) >= 0) return;
+      statusEntries.push({ label: st.toUpperCase(), value: st });
+    });
+    addRow("Status", "status", statusEntries);
+    var hasUnranked = jokesInCache.some(function (j) {
+      var r = j.rating != null ? Number(j.rating) : 0;
+      return !(r >= 1 && r <= 5);
+    });
+    var ratingUsed = {};
+    jokesInCache.forEach(function (j) {
+      var r = j.rating != null ? Number(j.rating) : 0;
+      if (r >= 1 && r <= 5) ratingUsed[r] = true;
+    });
+    var ratingEntries = [{ label: "ALL", value: "all" }];
+    if (hasUnranked) ratingEntries.push({ label: "0 (Unranked)", value: "unranked" });
+    [1, 2, 3, 4, 5].forEach(function (n) {
+      if (ratingUsed[n]) ratingEntries.push({ label: String(n), value: String(n) });
+    });
+    addRow("Rating", "rating", ratingEntries);
+    var topicsSet = {};
+    var topicSource = topicFromJokesOnly ? jokesInCache : (Array.isArray(_cache) ? _cache : []);
+    topicSource.forEach(function (item) {
+      if (!item) return;
+      if (topicFromJokesOnly && item.type !== "joke") return;
+      var top = item.topic != null && String(item.topic).trim() !== "" ? String(item.topic).trim() : "Uncategorized";
+      topicsSet[top] = true;
+    });
+    var topicList = Object.keys(topicsSet).sort(function (a, b) {
+      return a.localeCompare(b);
+    });
+    var topicEntries = [{ label: "ALL", value: "all" }];
+    topicList.forEach(function (t) {
+      topicEntries.push({ label: t, value: t });
+    });
+    addRow("Topic", "topic", topicEntries);
+  }
+
+  /**
+   * Renders Status / Rating / Topic chips into a chip host. Pass containerId to refresh one host only;
+   * omit to refresh the Home Hub and the Jokes sidebar (when present).
+   * @param {string} [containerId] - Element id: "hub-slicer-chip-rows" or "jokes-slicer-chip-rows"
+   */
+  function renderSlicer(containerId) {
+    var id = containerId != null ? String(containerId).trim() : "";
+    if (id !== "") {
+      var single = document.getElementById(id);
+      if (!single) return;
+      var jokesOnly = id === "jokes-slicer-chip-rows";
+      renderSlicerIntoHost(single, jokesOnly);
+      return;
+    }
+    var hubHost = document.getElementById("hub-slicer-chip-rows");
+    if (hubHost) renderSlicerIntoHost(hubHost, false);
+    var jokesHost = document.getElementById("jokes-slicer-chip-rows");
+    if (jokesHost) renderSlicerIntoHost(jokesHost, true);
+  }
+
+  async function refreshCache() {
+    if (!dataLayer) {
+      _cache = [];
+      jokesListCache = [];
+    updateGlobalTagDatalistFromCache();
+    renderSlicer();
+    updateJokesFiltersButtonLabel();
+    updateDashboardStats();
+    return;
+    }
+    var jokes = [];
+    var ideas = [];
+    try {
+      jokes = await dataLayer.listJokes().catch(function () {
+        return [];
+      });
+      ideas = await dataLayer.listIdeas().catch(function () {
+        return [];
+      });
+    } catch (err) {
+      jokes = [];
+      ideas = [];
+    }
+    if (!Array.isArray(jokes)) jokes = [];
+    if (!Array.isArray(ideas)) ideas = [];
+    var normJ = jokes
+      .map(function (j) {
+        return normalizeMirrorRecord(j, "joke");
+      })
+      .filter(Boolean);
+    var normI = ideas
+      .map(function (i) {
+        return normalizeMirrorRecord(i, "idea");
+      })
+      .filter(Boolean);
+    _cache = normJ.concat(normI);
+    jokesListCache = _cache.filter(function (x) {
+      return x && x.type === "joke";
+    });
+    updateGlobalTagDatalistFromCache();
+    renderSlicer();
+    updateJokesFiltersButtonLabel();
+    updateDashboardStats();
+    var ideasPanel = document.getElementById("panel-ideas");
+    if (ideasPanel && !ideasPanel.classList.contains("hidden")) {
+      var ideaSearchInput = document.getElementById("idea-search-input");
+      renderIdeas(ideaSearchInput ? ideaSearchInput.value : "");
+    }
+    var jokesPanel = document.getElementById("panel-jokes");
+    if (jokesPanel && !jokesPanel.classList.contains("hidden")) {
+      var jokeDetail = getJokeDetailEl();
+      var keepId = undefined;
+      if (jokeDetail && !jokeDetail.classList.contains("hidden") && jokeDetail.dataset.jokeId) {
+        var parsed = parseInt(jokeDetail.dataset.jokeId, 10);
+        if (Number.isFinite(parsed)) keepId = parsed;
+      }
+      renderJokeList(keepId);
+    }
+  }
+
+  function getJokeListOptionalKeepDetailId() {
+    var jokeDetail = getJokeDetailEl();
+    if (jokeDetail && !jokeDetail.classList.contains("hidden") && jokeDetail.dataset.jokeId) {
+      var parsed = parseInt(jokeDetail.dataset.jokeId, 10);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return undefined;
+  }
+
+  function onSlicerFiltersChanged() {
+    renderSlicer();
+    updateDashboardStats();
+    updateJokesFiltersButtonLabel();
+    var jokesPanel = document.getElementById("panel-jokes");
+    if (jokesPanel && !jokesPanel.classList.contains("hidden")) {
+      renderJokeList(getJokeListOptionalKeepDetailId());
+    }
+  }
+
+  function bindSlicerClickHost(hostEl) {
+    if (!hostEl || hostEl.dataset.slicerClickBound === "1") return;
+    hostEl.dataset.slicerClickBound = "1";
+    hostEl.addEventListener("click", function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest("button.slicer-pill[data-slicer-kind]") : null;
+      if (!btn || !hostEl.contains(btn)) return;
+      var kind = btn.getAttribute("data-slicer-kind");
+      var value = btn.getAttribute("data-slicer-value");
+      if (!kind || value === null || value === undefined) return;
+      _filters[kind] = value;
+      onSlicerFiltersChanged();
+    });
+  }
+
+  function initHubSmartSlicer() {
+    var hub = document.getElementById("hub-smart-slicer");
+    if (hub && hub.dataset.hubSlicerBound !== "1") {
+      hub.dataset.hubSlicerBound = "1";
+      bindSlicerClickHost(hub);
+    }
+    var jokesAside = document.getElementById("jokes-filter-sidebar");
+    if (jokesAside && jokesAside.dataset.jokesSlicerBound !== "1") {
+      jokesAside.dataset.jokesSlicerBound = "1";
+      bindSlicerClickHost(jokesAside);
+    }
+    var searchEl = document.getElementById("hub-slicer-search");
+    if (searchEl && searchEl.dataset.hubSearchBound !== "1") {
+      searchEl.dataset.hubSearchBound = "1";
+      searchEl.addEventListener("input", function () {
+        var el = searchEl;
+        if (_hubSearchDebounceTimer != null) clearTimeout(_hubSearchDebounceTimer);
+        _hubSearchDebounceTimer = setTimeout(function () {
+          _hubSearchDebounceTimer = null;
+          _filters.search = el.value != null ? String(el.value) : "";
+          updateDashboardStats();
+        }, 150);
+      });
+    }
+  }
+
+  function setJokesFilterSidebarOpen(open) {
+    var side = document.getElementById("jokes-filter-sidebar");
+    var back = document.getElementById("jokes-sidebar-backdrop");
+    var isOpen = !!open;
+    if (side) {
+      side.classList.toggle("is-open", isOpen);
+      side.setAttribute("aria-hidden", isOpen ? "false" : "true");
+    }
+    if (back) {
+      back.classList.toggle("is-open", isOpen);
+      back.setAttribute("aria-hidden", isOpen ? "false" : "true");
+    }
+  }
+
+  function initJokesFolderChrome() {
+    var panel = document.getElementById("panel-jokes");
+    if (!panel || panel.dataset.jokesFolderChromeBound === "1") return;
+    panel.dataset.jokesFolderChromeBound = "1";
+    var filtersBtn = document.getElementById("jokes-filters-btn");
+    var newBtn = document.getElementById("jokes-new-btn");
+    var backdrop = document.getElementById("jokes-sidebar-backdrop");
+    var closeBtn = document.getElementById("jokes-sidebar-close");
+    var clearBtn = document.getElementById("jokes-clear-filters-btn");
+    var searchEl = document.getElementById("jokes-search");
+    if (filtersBtn) {
+      filtersBtn.addEventListener("click", function () {
+        setJokesFilterSidebarOpen(true);
+      });
+    }
+    if (newBtn) {
+      newBtn.addEventListener("click", function () {
+        openNewJokeDetail();
+      });
+    }
+    if (backdrop) {
+      backdrop.addEventListener("click", function () {
+        setJokesFilterSidebarOpen(false);
+      });
+    }
+    if (closeBtn) {
+      closeBtn.addEventListener("click", function () {
+        setJokesFilterSidebarOpen(false);
+      });
+    }
+    if (clearBtn) {
+      clearBtn.addEventListener("click", function () {
+        _filters.status = "all";
+        _filters.rating = "all";
+        _filters.topic = "all";
+        onSlicerFiltersChanged();
+        setJokesFilterSidebarOpen(false);
+      });
+    }
+    if (searchEl) {
+      searchEl.addEventListener("input", function () {
+        if (_jokesSearchDebounceTimer != null) clearTimeout(_jokesSearchDebounceTimer);
+        _jokesSearchDebounceTimer = setTimeout(function () {
+          _jokesSearchDebounceTimer = null;
+          renderJokeList(getJokeListOptionalKeepDetailId());
+        }, 150);
+      });
+    }
+  }
+
+  async function convertToJoke(ideaId) {
+    var iid = parseInt(String(ideaId).trim(), 10);
+    if (!Number.isFinite(iid) || iid < 1) throw new Error("Invalid idea id");
+    if (!dataLayer || typeof dataLayer.getIdea !== "function") {
+      throw new Error("Convert not available");
+    }
+    var idea = await dataLayer.getIdea(iid);
+    if (!idea) throw new Error("Idea not found");
+    _pendingSourceIdeaId = iid;
+    closeIdeaDetailModal();
+    showPanel("jokes", false);
+    setJokesFilterSidebarOpen(false);
+    var mc = document.getElementById("modal-container");
+    if (mc) mc.classList.add("is-detail-view");
+    var el = getJokeDetailEl();
+    if (!el) {
+      _pendingSourceIdeaId = null;
+      throw new Error("Joke detail container missing");
+    }
+    setJokesDetailVisibility(true);
+    el.dataset.jokeId = "";
+    window.currentJokeId = null;
+    var mappedTitle = idea.title != null ? String(idea.title).trim() : "";
+    var mappedBody = idea.content != null ? String(idea.content) : "";
+    var ideaTopicRaw = idea.topic != null ? String(idea.topic).trim() : "";
+    var mappedTopic = ideaTopicRaw !== "" ? ideaTopicRaw : "Uncategorized";
+    var mappedTags = Array.isArray(idea.tags) ? idea.tags.slice() : [];
+    var mappedNotes = idea.notes != null ? String(idea.notes) : "";
+    renderUniversalDetail(
+      "joke",
+      {
+        title: mappedTitle,
+        content: mappedBody,
+        act_out: "",
+        premise: mappedBody,
+        punchline: "",
+        status: "draft",
+        rating: "",
+        setup_notes: mappedNotes,
+        tags: mappedTags,
+        duration: null
+      },
+      { el: el, hideDelete: true }
+    );
+    var titleRich = document.getElementById("joke-detail-title-display");
+    var titleInput = getJokeEditTitleEl();
+    if (titleRich) {
+      titleRich.classList.remove("hidden");
+      titleRich.innerHTML = "<span style=\"color: var(--neon-green)\">CONVERTING IDEA</span>";
+    }
+    if (titleInput) {
+      titleInput.value = mappedTitle;
+      titleInput.classList.add("hidden");
+    }
+    toggleJokeAdmin(false);
+    var topicEl = document.getElementById("joke-edit-topic");
+    fillTopicSelect(topicEl, mappedTopic).then(function () {
+      if (topicEl) topicEl.value = mappedTopic;
+    });
+    var setTrig = el.querySelector(".btn-set-trigger");
+    if (setTrig) {
+      setTrig.disabled = true;
+      setTrig.setAttribute("aria-disabled", "true");
+      setTrig.title = "Save the joke first to add to a set";
+    }
+    bindJokeDetailActions(el, mc, { skipBodyFocus: true });
+    await refreshCache();
+  }
 
   function showToast(message, backgroundColor) {
     var msg = message != null ? String(message) : "";
@@ -41,36 +511,6 @@
     }, 5000);
   }
 
-  /** Set when user chooses "Convert"; cleared after joke save or back. */
-  var pendingConversionId = null;
-  var pendingConversionIdea = null;
-
-  function clearPendingConversion() {
-    pendingConversionId = null;
-    pendingConversionIdea = null;
-    try {
-      delete window.pendingConversionId;
-      delete window.pendingConversionIdea;
-    } catch (e) {
-      window.pendingConversionId = null;
-      window.pendingConversionIdea = null;
-    }
-  }
-
-  function setPendingConversion(idea) {
-    pendingConversionId = idea.id;
-    pendingConversionIdea = {
-      id: idea.id,
-      title: idea.title,
-      premise: idea.premise != null ? idea.premise : (idea.content != null ? idea.content : ""),
-      notes: idea.notes != null ? idea.notes : (idea.setup_notes != null ? idea.setup_notes : ""),
-      topic: idea.topic,
-      tags: Array.isArray(idea.tags) ? idea.tags.slice() : []
-    };
-    window.pendingConversionId = pendingConversionId;
-    window.pendingConversionIdea = pendingConversionIdea;
-  }
-
   function getJokeAdminFieldsEl() {
     return document.getElementById("joke-admin-fields");
   }
@@ -89,46 +529,6 @@
   }
 
   window.toggleJokeAdmin = toggleJokeAdmin;
-
-  function finishNewJokeAfterMoveFromIdea(created) {
-    if (pendingConversionId == null) return Promise.resolve(created);
-    var pid = pendingConversionId;
-    clearPendingConversion();
-    var delP = dataLayer
-      ? dataLayer.deleteIdea(pid)
-      : apiFetch("/ideas/" + pid, { method: "DELETE" }).then(function (r) {
-          if (!r.ok) throw new Error("Delete failed");
-        });
-    return delP.then(function () { return created; }).catch(function () { return created; });
-  }
-
-  function exitJokeConversionToIdea() {
-    var ideaSnap = pendingConversionIdea;
-    if (!ideaSnap) return;
-    var detailEl = document.getElementById("jokes-detail-container");
-    var listEl = document.getElementById("joke-list");
-    var quickAddEl = document.getElementById("ws-joke-input");
-    var listHeaderEl = document.getElementById("ws-jokes-list-header");
-    var toolbarEl = document.getElementById("jokes-toolbar");
-    var jokesPanel = getJokesPanelEl();
-    if (listEl) listEl.classList.remove("hidden");
-    if (quickAddEl) quickAddEl.classList.remove("hidden");
-    if (listHeaderEl) listHeaderEl.classList.remove("hidden");
-    if (toolbarEl) toolbarEl.classList.remove("hidden");
-    if (detailEl) {
-      detailEl.classList.add("hidden");
-      detailEl.innerHTML = "";
-      delete detailEl.dataset.jokeNewFromIdea;
-    }
-    setJokesPanelHeaderListMode();
-    clearPendingConversion();
-    openModal("ideas");
-    var mc = document.getElementById("modal-container");
-    var ideasPanel = document.getElementById("panel-ideas");
-    if (mc) mc.classList.add("is-detail-view");
-    if (ideasPanel) ideasPanel.classList.add("is-detail-view");
-    showIdeaDetail(ideaSnap);
-  }
 
   /**
    * Sums joke durations and returns a string in MM:SS format.
@@ -329,7 +729,7 @@
     }
     if (field === "topic") {
       var tTopic = idea.topic != null ? String(idea.topic) : "";
-      return tTopic.trim() !== "" ? tTopic : "—";
+      return tTopic.trim() !== "" ? tTopic : "Uncategorized";
     }
     if (field === "tags") return Array.isArray(idea.tags) && idea.tags.length ? idea.tags.join(", ") : "—";
     return "";
@@ -453,16 +853,13 @@
     document.querySelectorAll(".header .tab").forEach(function (t) {
       t.classList.toggle("active", t.getAttribute("data-tab") === tabId);
     });
-    document.querySelectorAll(".hub-drawer[data-folder]").forEach(function (b) {
-      b.classList.toggle("active", b.getAttribute("data-folder") === folder);
-    });
     if (tabId === "jokes") setJokesNavHeaderRowVisible(true);
     if (tabId === "ideas") loadIdeas();
     if (tabId === "jokes") loadJokes();
     if (tabId === "sets") loadSets();
     syncFolderLayerActiveForTab(tabId);
     if (tabId === "ideas") schedulePanelFocus("new-idea-title-input");
-    if (tabId === "jokes") schedulePanelFocus("new-joke-title-input");
+    if (tabId === "jokes") schedulePanelFocus("jokes-search");
     if (tabId === "sets") schedulePanelFocus("new-set-title-input");
   }
 
@@ -519,9 +916,6 @@
       document.querySelectorAll(".folder-layer").forEach(function (el) {
         el.classList.remove("active");
       });
-      document.querySelectorAll(".hub-drawer").forEach(function (b) {
-        b.classList.remove("active");
-      });
     }
   }
 
@@ -547,6 +941,18 @@
   }
 
   function closeModal(sweepOnly) {
+    _pendingSourceIdeaId = null;
+    var jokeTitleDisplay = document.getElementById("joke-detail-title-display");
+    if (jokeTitleDisplay) {
+      jokeTitleDisplay.classList.add("hidden");
+      jokeTitleDisplay.innerHTML = "";
+    }
+    var jokeDetailEl = getJokeDetailEl();
+    var jokeTitleInputReset = getJokeEditTitleEl();
+    var jokeDetailOpen = jokeDetailEl && !jokeDetailEl.classList.contains("hidden");
+    if (jokeTitleInputReset && jokeDetailOpen) {
+      jokeTitleInputReset.classList.remove("hidden");
+    }
     if (sweepOnly) {
       sweepOpenDetailSlabs(true);
       return;
@@ -614,9 +1020,6 @@
         panelHome.classList.remove("hidden");
         panelHome.style.display = "flex";
       }
-      document.querySelectorAll(".hub-drawer[data-folder]").forEach(function (b) {
-        b.classList.remove("active");
-      });
     } else {
       if (document.body) document.body.classList.add("panel-open");
       if (panelHome) {
@@ -647,6 +1050,8 @@
 
   var STAGETIME_ACCENT_KEY = "stagetime_accent_hex";
   var DEFAULT_ACCENT_HEX = "#00f2ff";
+  /** Preset chips in Settings (Steel Gray replaces pure black for visibility). */
+  var SETTINGS_ACCENT_PRESET_HEXES = ["#444444", "#00f2ff", "#e879f9", "#4ade80", "#fbbf24", "#fb7185"];
 
   function updateThemeColorMeta() {
     var meta = document.querySelector('meta[name="theme-color"]');
@@ -679,14 +1084,30 @@
     return "#" + pad2(triplet.r) + pad2(triplet.g) + pad2(triplet.b);
   }
 
+  /** Relative luminance 0–1; below ~0.1 reads as "invisible" on dark chrome UI. */
+  function accentHexBrightness01(hex) {
+    var t = hexToRgbForAccent(hex);
+    if (!t) return 0;
+    return (0.299 * t.r + 0.587 * t.g + 0.114 * t.b) / 255;
+  }
+
+  function clampAccentToVisibleHex(normalized) {
+    if (!normalized) return DEFAULT_ACCENT_HEX;
+    var lower = normalized.toLowerCase();
+    if (lower === "#000000" || accentHexBrightness01(normalized) < 0.1) return DEFAULT_ACCENT_HEX;
+    return normalized;
+  }
+
   function setAccentColor(hex) {
+    if (hex != null && String(hex).trim().toLowerCase() === "#000000") hex = "#00f2ff";
     var normalized = normalizeAccentHex(hex);
     if (!normalized) normalized = DEFAULT_ACCENT_HEX;
+    normalized = clampAccentToVisibleHex(normalized);
     var triplet = hexToRgbForAccent(normalized);
     if (!triplet) triplet = hexToRgbForAccent(DEFAULT_ACCENT_HEX);
     var root = document.documentElement;
     root.style.setProperty("--accent-color", normalized);
-    root.style.setProperty("--accent-rgb", triplet.r + ", " + triplet.g + ", " + triplet.b);
+    root.style.setProperty("--accent-rgb", String(triplet.r) + ", " + String(triplet.g) + ", " + String(triplet.b));
     root.style.setProperty("--3d-light", "rgba(" + triplet.r + ", " + triplet.g + ", " + triplet.b + ", 0.2)");
     try {
       localStorage.setItem(STAGETIME_ACCENT_KEY, normalized);
@@ -725,31 +1146,40 @@
     });
   }
 
+  function bindSettingsAccentPresets() {
+    var colorInput = document.getElementById("settings-accent-color");
+    var parent = colorInput && colorInput.parentElement;
+    if (!parent) return;
+    var wrap = document.getElementById("settings-accent-presets");
+    if (!wrap) {
+      wrap = document.createElement("div");
+      wrap.id = "settings-accent-presets";
+      wrap.className = "settings-accent-presets";
+      wrap.setAttribute("role", "group");
+      wrap.setAttribute("aria-label", "Accent color presets");
+      if (colorInput.nextSibling) parent.insertBefore(wrap, colorInput.nextSibling);
+      else parent.appendChild(wrap);
+    }
+    if (wrap.dataset.accentPresetsBound === "1") return;
+    wrap.dataset.accentPresetsBound = "1";
+    SETTINGS_ACCENT_PRESET_HEXES.forEach(function (presetHex) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "settings-accent-preset-btn";
+      btn.style.backgroundColor = presetHex;
+      btn.setAttribute("aria-label", "Use accent " + presetHex);
+      btn.addEventListener("click", function () {
+        setAccentColor(presetHex);
+      });
+      wrap.appendChild(btn);
+    });
+  }
+
   function showSettingsView(view) {
     var dashboard = document.getElementById("settings-dashboard");
     var importExportView = document.getElementById("settings-view-import-export");
     if (dashboard) dashboard.classList.toggle("hidden", view !== "dashboard");
     if (importExportView) importExportView.classList.toggle("hidden", view !== "import-export");
-  }
-
-  function getDashboardSlicerStatus() {
-    var activePill = document.querySelector("#status-slicer .slicer-pill.active");
-    var raw = activePill && activePill.getAttribute("data-status") ? String(activePill.getAttribute("data-status")).trim().toLowerCase() : "all";
-    if (raw === "active" || raw === "draft") return raw;
-    return "all";
-  }
-
-  function initHomeStatusSlicer() {
-    var slicer = document.getElementById("status-slicer");
-    if (!slicer || slicer.dataset.slicerBound === "1") return;
-    slicer.dataset.slicerBound = "1";
-    slicer.addEventListener("click", function (e) {
-      var btn = e.target && e.target.closest ? e.target.closest(".slicer-pill[data-status]") : null;
-      if (!btn || !slicer.contains(btn)) return;
-      slicer.querySelectorAll(".slicer-pill").forEach(function (p) { p.classList.remove("active"); });
-      btn.classList.add("active");
-      updateDashboardStats();
-    });
   }
 
   function formatDashboardRuntime(totalSeconds) {
@@ -788,28 +1218,18 @@
       if (setsEl) setsEl.textContent = "0";
       return;
     }
-    Promise.all([
-      dataLayer.listJokes().catch(function () { return []; }),
-      dataLayer.listIdeas().catch(function () { return []; }),
-      dataLayer.listSets().catch(function () { return []; })
-    ]).then(function (results) {
-      var jokeRows = Array.isArray(results[0]) ? results[0] : [];
-      var ideasRows = Array.isArray(results[1]) ? results[1] : [];
-      var setsRows = Array.isArray(results[2]) ? results[2] : [];
-      var jokesOnly = jokeRows.filter(function (j) {
-        var typRaw = j != null && j.type != null ? String(j.type) : "";
-        var typ = typRaw !== "" ? typRaw : "joke";
-        return typ === "joke";
+    Promise.all([dataLayer.listSets().catch(function () { return []; })]).then(function (results) {
+      var setsRows = Array.isArray(results[0]) ? results[0] : [];
+      var slice = getFilteredData();
+      var jokesOnly = slice.filter(function (x) {
+        return x && x.type === "joke";
       });
-      var sliceMode = getDashboardSlicerStatus();
-      if (sliceMode === "active") {
-        jokesOnly = jokesOnly.filter(function (j) { return j && String(j.status || "") === "active"; });
-      } else if (sliceMode === "draft") {
-        jokesOnly = jokesOnly.filter(function (j) { return j && String(j.status || "") === "draft"; });
-      }
+      var ideasOnly = slice.filter(function (x) {
+        return x && x.type === "idea";
+      });
       if (jokesEl) jokesEl.textContent = nTxt(jokesOnly.length);
       if (runtimeEl) runtimeEl.textContent = formatDashboardRuntime(sumJokeRuntimeSeconds(jokesOnly));
-      if (ideasEl) ideasEl.textContent = nTxt(ideasRows.length);
+      if (ideasEl) ideasEl.textContent = nTxt(ideasOnly.length);
       if (setsEl) setsEl.textContent = nTxt(setsRows.length);
     }).catch(function () {
       if (jokesEl) jokesEl.textContent = "0";
@@ -827,6 +1247,11 @@
     return document.getElementById("joke-edit-title");
   }
   function setJokesPanelHeaderListMode() {
+    var rich = document.getElementById("joke-detail-title-display");
+    if (rich) {
+      rich.classList.add("hidden");
+      rich.innerHTML = "";
+    }
     var h2 = getJokesPanelTitleDisplayEl();
     var inp = getJokeEditTitleEl();
     if (h2) {
@@ -845,7 +1270,6 @@
   }
   function getJokeDetailEl() { return document.getElementById("jokes-detail-container"); }
   function getJokeControlsEl() { return document.getElementById("joke-controls"); }
-  function getJokesToolbarEl() { return document.getElementById("jokes-toolbar"); }
   function getJokesNavHeaderRowEl() {
     var jokesPanel = getJokesPanelEl();
     return jokesPanel ? jokesPanel.querySelector(".nav-header-row") : null;
@@ -870,6 +1294,11 @@
       if (jokesListFolder) jokesListFolder.classList.add("hidden");
       if (detailEl) detailEl.classList.remove("hidden");
       if (controlsEl) controlsEl.classList.add("hidden");
+      var titleRich = document.getElementById("joke-detail-title-display");
+      if (titleRich) {
+        titleRich.classList.add("hidden");
+        titleRich.innerHTML = "";
+      }
       var titleH2 = getJokesPanelTitleDisplayEl();
       var titleInp = getJokeEditTitleEl();
       if (titleH2) titleH2.classList.add("hidden");
@@ -939,23 +1368,50 @@
     return out;
   }
 
-  var jokesModalFilterState = { topic: "all", status: "all", query: "", sortBy: "newest" };
+  var jokesModalFilterState = { topic: "all", status: "all", rating: "all", query: "", sortBy: "newest" };
   var jokesListCache = [];
 
   function getFilteredJokes(data, state) {
     if (!Array.isArray(data)) return [];
     var out = data.slice();
     if (state.topic != null && state.topic !== "all" && state.topic !== "") {
-      out = out.filter(function (j) { return (j.topic || "") === state.topic; });
+      out = out.filter(function (j) {
+        var top = j.topic != null && String(j.topic).trim() !== "" ? String(j.topic).trim() : "Uncategorized";
+        return top === state.topic;
+      });
     }
     if (state.status != null && state.status !== "all" && state.status !== "") {
       out = out.filter(function (j) { return (j.status || "") === state.status; });
+    }
+    if (state.rating != null && state.rating !== "all" && state.rating !== "") {
+      if (state.rating === "unranked") {
+        out = out.filter(function (j) {
+          var r = j.rating != null ? Number(j.rating) : 0;
+          return !(r >= 1 && r <= 5);
+        });
+      } else {
+        var wantR = parseInt(String(state.rating), 10);
+        out = out.filter(function (j) {
+          var r = j.rating != null ? Number(j.rating) : 0;
+          return r === wantR;
+        });
+      }
     }
     if (state.query != null && String(state.query).trim() !== "") {
       var q = String(state.query).trim().toLowerCase();
       out = out.filter(function (j) {
         var title = (j.title || "").toLowerCase();
-        var content = ((j.premise || "") + " " + (j.punchline || "")).toLowerCase().replace(/\s+/g, " ");
+        var content = (
+          (j.content != null ? String(j.content) : "") +
+          " " +
+          (j.act_out != null ? String(j.act_out) : "") +
+          " " +
+          (j.premise != null ? String(j.premise) : "") +
+          " " +
+          (j.punchline != null ? String(j.punchline) : "")
+        )
+          .toLowerCase()
+          .replace(/\s+/g, " ");
         return title.indexOf(q) >= 0 || content.indexOf(q) >= 0;
       });
     }
@@ -1055,16 +1511,21 @@
   }
 
   function renderJokeList(optionalSelectJokeId) {
+    jokesModalFilterState.topic = _filters.topic != null ? _filters.topic : "all";
+    jokesModalFilterState.status = _filters.status != null ? _filters.status : "all";
+    jokesModalFilterState.rating = _filters.rating != null ? _filters.rating : "all";
+    var searchEl = document.getElementById("jokes-search");
+    jokesModalFilterState.query = searchEl ? String(searchEl.value || "") : "";
+    jokesModalFilterState.sortBy = "newest";
     var list = getFilteredJokes(jokesListCache, jokesModalFilterState);
     var el = getJokeListEl();
-    var detailEl = getJokeDetailEl();
-    var toolbarEl = getJokesToolbarEl();
     if (!el) return;
-    if (window.pendingConversionId && detailEl && detailEl.dataset.jokeNewFromIdea === "1" && optionalSelectJokeId == null) {
-      return;
-    }
     if (list.length === 0) {
-      el.innerHTML = "<div class=\"list-empty\" role=\"status\">No jokes yet. Use the Add button above to create one.</div>";
+      var emptyMsg =
+        jokesListCache.length === 0
+          ? "No jokes yet. Tap NEW JOKE above to create one."
+          : "No jokes match these filters. Adjust search or filters.";
+      el.innerHTML = "<div class=\"list-empty\" role=\"status\">" + emptyMsg + "</div>";
       setJokesDetailVisibility(false);
       scheduleJokesControlRowGeometrySync();
       return;
@@ -1087,34 +1548,8 @@
 
   var jokesControlRowGeometrySyncRaf = null;
 
-  // Keeps the Jokes header search bar aligned with the toolbar filter row.
   function syncJokesControlRowGeometry() {
-    var modal = getJokesPanelEl();
-    if (!modal) return;
-    var searchEl = document.getElementById("joke-search");
-    var topicEl = document.getElementById("joke-filter-topic");
-    var sortEl = document.getElementById("joke-sort");
-    var addBtn = document.getElementById("add-item-btn-jokes");
-    var backBtn = modal.querySelector('button[data-panel="jokes"]');
-
-    if (!searchEl || !topicEl || !sortEl || !addBtn || !backBtn) return;
-    if (topicEl.getClientRects().length === 0 || sortEl.getClientRects().length === 0) return;
-
-    // Width span: left edge of topic -> right edge of sort.
-    var topicRect = topicEl.getBoundingClientRect();
-    var sortRect = sortEl.getBoundingClientRect();
-    var spanWidth = Math.round(sortRect.right - topicRect.left);
-    if (spanWidth > 0) modal.style.setProperty("--jokes-filter-span-width", spanWidth + "px");
-
-    // Ensure Back button and Add button are the same width for vertical flush alignment.
-    var addW = addBtn.getBoundingClientRect().width;
-    var backW = backBtn.getBoundingClientRect().width;
-    var w = Math.max(addW, backW);
-    if (w > 0) {
-      addBtn.style.width = w + "px";
-      backBtn.style.width = w + "px";
-    }
-    searchEl.style.display = "flex";
+    return;
   }
 
   function scheduleJokesControlRowGeometrySync() {
@@ -1126,45 +1561,27 @@
   }
 
   function fetchJokesForModal(optionalSelectJokeId) {
-    var listP = dataLayer ? dataLayer.listJokes() : apiFetch("/jokes").then(function (r) { return r.json(); });
-    return listP.then(function (list) {
-      jokesListCache = Array.isArray(list) ? list : [];
-      var topicEl = document.getElementById("joke-filter-topic");
-      if (topicEl && topicEl.options.length <= 1 && dataLayer && dataLayer.getMasterTopics) {
-        topicEl.innerHTML = "<option value=\"all\">All topics</option>";
-        return dataLayer.getMasterTopics().then(function (topics) {
-          (topics || []).forEach(function (t) {
-            var opt = document.createElement("option");
-            opt.value = t != null ? String(t) : "";
-            opt.textContent = escapeHtml(t != null ? String(t) : "");
-            topicEl.appendChild(opt);
-          });
-          renderJokeList(optionalSelectJokeId);
-          updateDashboardStats();
-        });
-      }
+    function afterCacheFill() {
+      jokesListCache = Array.isArray(_cache) ? _cache.filter(function (x) { return x && x.type === "joke"; }) : [];
       renderJokeList(optionalSelectJokeId);
-      updateDashboardStats();
-    }).catch(function () {
-      jokesListCache = [];
-      var listEl = getJokeListEl();
-      if (listEl) listEl.innerHTML = "<div class=\"list-empty\" role=\"alert\">Could not load jokes." + (dataLayer && dataLayer.getStorageMode() === "local" ? "" : " Is the server running?") + "</div>";
-      var detailEl = getJokeDetailEl();
-      if (detailEl) detailEl.classList.add("hidden");
-      if (listEl) listEl.classList.remove("hidden");
-      var quickAddEl = document.getElementById("ws-joke-input");
-      var listHeaderEl = document.getElementById("ws-jokes-list-header");
-      if (quickAddEl) quickAddEl.classList.remove("hidden");
-      if (listHeaderEl) listHeaderEl.classList.remove("hidden");
-      var toolbarEl = getJokesToolbarEl();
-      if (toolbarEl) toolbarEl.classList.remove("hidden");
-      updateDashboardStats();
-    });
+      return Promise.resolve();
+    }
+    return refreshCache()
+      .then(afterCacheFill)
+      .catch(function () {
+        jokesListCache = [];
+        var listEl = getJokeListEl();
+        if (listEl) listEl.innerHTML = "<div class=\"list-empty\" role=\"alert\">Could not load jokes." + (dataLayer && dataLayer.getStorageMode() === "local" ? "" : " Is the server running?") + "</div>";
+        var detailEl = getJokeDetailEl();
+        if (detailEl) detailEl.classList.add("hidden");
+        if (listEl) listEl.classList.remove("hidden");
+        updateDashboardStats();
+      });
   }
 
   function loadJokes(optionalSelectJokeId) {
     fetchJokesForModal(optionalSelectJokeId);
-    schedulePanelFocus("new-joke-title-input");
+    schedulePanelFocus("jokes-search");
   }
 
   /** Split stored punchline into Act Out + Punchline (double newline); legacy single block → punch only. */
@@ -1204,6 +1621,181 @@
   }
 
   window.focusJokeBodyIfEmpty = focusJokeBodyIfEmpty;
+
+  function saveJoke(el, saveBtn) {
+    var tagsInput = document.getElementById("joke-edit-tags");
+    var tagsVal = tagsInput ? tagsInput.value.trim() : "";
+    var durationInput = document.getElementById("joke-edit-duration");
+    var durationVal = durationInput && durationInput.value.trim() !== "" ? parseInt(durationInput.value.trim(), 10) : null;
+    if (durationVal !== null && (isNaN(durationVal) || durationVal < 0)) durationVal = null;
+    var titleHead = document.getElementById("joke-edit-title");
+    var payload = {
+      title: titleHead ? titleHead.value.trim() || null : null,
+      premise: readJokePremiseFromForm(),
+      punchline: readJokePunchlineFromForm(),
+      status: document.getElementById("joke-edit-status").value,
+      setup_notes: document.getElementById("joke-edit-setup_notes") ? document.getElementById("joke-edit-setup_notes").value.trim() || null : undefined,
+      topic: document.getElementById("joke-edit-topic") ? document.getElementById("joke-edit-topic").value.trim() || null : undefined,
+      tags: tagsVal ? tagsVal.split(",").map(function (t) { return t.trim(); }).filter(Boolean) : [],
+      rating: (function () { var r = document.getElementById("joke-edit-rating"); var v = r ? r.value : ""; return v ? parseInt(v, 10) : null; })(),
+      duration: durationVal
+    };
+    if (!payload.title) return;
+
+    var jidRaw = el.dataset.jokeId != null ? String(el.dataset.jokeId).trim() : "";
+    var isNewJoke = jidRaw === "";
+
+    if (isNewJoke) {
+      var addFn = window.dataLayer && window.dataLayer.addJoke ? window.dataLayer.addJoke.bind(window.dataLayer) : null;
+      if (!addFn) {
+        addFn = function (data) {
+          return apiFetch("/jokes", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: data.title,
+              premise: data.premise || "",
+              punchline: data.punchline != null ? data.punchline : "",
+              status: data.status || "draft",
+              topic: data.topic,
+              tags: data.tags,
+              duration: data.duration,
+              setup_notes: data.setup_notes,
+              rating: data.rating
+            })
+          }).then(function (r) {
+            if (!r.ok) throw new Error("Save failed");
+            return r.json();
+          });
+        };
+      }
+      addFn({
+        title: payload.title,
+        premise: payload.premise,
+        punchline: payload.punchline != null ? payload.punchline : "",
+        status: payload.status,
+        topic: payload.topic,
+        tags: payload.tags,
+        duration: payload.duration,
+        setup_notes: payload.setup_notes,
+        rating: payload.rating
+      })
+        .then(function (created) {
+          var pendingSrc = _pendingSourceIdeaId;
+          function finishNewJokeSaveUi() {
+            var titleRich = document.getElementById("joke-detail-title-display");
+            if (titleRich) {
+              titleRich.classList.add("hidden");
+              titleRich.innerHTML = "";
+            }
+            var titleInp = getJokeEditTitleEl();
+            if (titleInp) {
+              titleInp.classList.remove("hidden");
+              var newTitle = created && created.title != null ? String(created.title) : (payload.title || "");
+              titleInp.value = newTitle;
+            }
+            if (created && created.id != null) {
+              el.dataset.jokeId = String(created.id);
+              window.currentJokeId = created.id;
+            }
+            var setTrig = el.querySelector(".btn-set-trigger");
+            if (setTrig) {
+              setTrig.disabled = false;
+              setTrig.removeAttribute("aria-disabled");
+              setTrig.removeAttribute("title");
+            }
+            loadJokes(created && created.id != null ? created.id : undefined);
+            if (!saveBtn) return;
+            saveBtn.classList.add("btn-save-success");
+            saveBtn.textContent = "Saved! ✓";
+            window.setTimeout(function () {
+              saveBtn.classList.remove("btn-save-success");
+              saveBtn.textContent = "Save";
+            }, 1500);
+          }
+          if (pendingSrc != null) {
+            var delP = dataLayer && typeof dataLayer.deleteIdea === "function"
+              ? dataLayer.deleteIdea(pendingSrc)
+              : apiFetch("/ideas/" + pendingSrc, { method: "DELETE" }).then(function (r) {
+                  if (!r.ok) throw new Error("Delete failed");
+                });
+            delP
+              .then(function () {
+                _pendingSourceIdeaId = null;
+                return refreshCache();
+              })
+              .then(function () {
+                var ideaSearch = document.getElementById("idea-search-input");
+                renderIdeas(ideaSearch ? ideaSearch.value : "");
+                updateDashboardStats();
+                finishNewJokeSaveUi();
+              })
+              .catch(function () {
+                _pendingSourceIdeaId = null;
+                finishNewJokeSaveUi();
+              });
+          } else {
+            _pendingSourceIdeaId = null;
+            finishNewJokeSaveUi();
+          }
+        })
+        .catch(function () {});
+      return;
+    }
+
+    var jokeIdNum = parseInt(jidRaw, 10);
+    if (isNaN(jokeIdNum)) return;
+
+    var updateP = dataLayer
+      ? dataLayer.updateJoke(jokeIdNum, payload)
+      : apiFetch("/jokes/" + jokeIdNum, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }).then(function (r) {
+          if (!r.ok) throw new Error("Update failed");
+          return r.json();
+        });
+    updateP
+      .then(function (updated) {
+        if (updated) {
+          window.currentJokeId = updated.id;
+          el.dataset.jokeId = updated.id != null ? String(updated.id) : "";
+        }
+        loadJokes();
+        setJokesDetailVisibility(false);
+        if (!saveBtn) return;
+        saveBtn.classList.add("btn-save-success");
+        saveBtn.textContent = "Saved! ✓";
+        window.setTimeout(function () {
+          saveBtn.classList.remove("btn-save-success");
+          saveBtn.textContent = "Save";
+        }, 1500);
+      })
+      .catch(function () {});
+  }
+
+  /**
+   * Wires save / admin toggle / optional body focus after joke detail DOM is built.
+   * New jokes use el.dataset.jokeId === ""; existing jokes use numeric id string.
+   */
+  function bindJokeDetailActions(el, mc, opts) {
+    opts = opts || {};
+    var skipBodyFocus = !!opts.skipBodyFocus;
+
+    function returnToJokeList() {
+      clearJokeDetailAndBack(el, mc);
+    }
+    el._returnToJokeList = returnToJokeList;
+
+    var saveBtn = el.querySelector("#joke-detail-save-btn");
+    if (saveBtn) {
+      saveBtn.addEventListener("click", function () {
+        saveJoke(el, saveBtn);
+      });
+    }
+
+    var moreBtn = document.getElementById("joke-detail-more-btn");
+    if (moreBtn) moreBtn.addEventListener("click", function () { toggleJokeAdmin(); });
+
+    if (!skipBodyFocus) focusJokeBodyIfEmpty();
+  }
 
   function applyModalContentTypeClass(type, item) {
     var modalContainer = document.getElementById("modal-container");
@@ -1366,6 +1958,8 @@
         `</div>` +
         `<div class="modal-form-row"><p class="detail-label">Content</p><textarea id="idea-focus-content" class="live-edit-field" rows="7">${escapeHtml(ideaBodyStr)}</textarea></div>` +
         `<div class="modal-form-row"><p class="detail-label">Notes</p><textarea id="idea-focus-notes" class="live-edit-field" rows="4">${escapeHtml(ideaNotesStr)}</textarea></div>` +
+        `<div class="modal-form-row"><p class="detail-label">Topic</p><select id="idea-edit-topic" class="workstation-select topic-select-global" aria-label="Idea topic"></select></div>` +
+        `<div class="modal-form-row"><p class="detail-label">Tags</p><input type="text" id="idea-edit-tags" class="live-edit-field" list="tag-datalist" placeholder="Comma-separated tags" value="" autocomplete="off" aria-label="Idea tags"></div>` +
         `<div class="silo-footer-actions">` +
         `<button type="button" class="silo-slab detail-modal-close-btn" onclick="window.closeModal(event)" aria-label="Close">×</button>` +
         `<button type="button" class="silo-slab" onclick="window.openSetPicker(${ideaId != null && !isNaN(ideaId) ? String(ideaId) : "null"}, 'idea')">+SET</button>` +
@@ -1376,6 +1970,29 @@
         `</div>` +
         `</div>`;
       el = contentPane;
+      var topicSel = document.getElementById("idea-edit-topic");
+      var tagsInp = document.getElementById("idea-edit-tags");
+      var topicVal =
+        item.topic != null && String(item.topic).trim() !== ""
+          ? String(item.topic).trim()
+          : "Uncategorized";
+      if (tagsInp) {
+        tagsInp.value = Array.isArray(item.tags)
+          ? item.tags
+              .map(function (t) {
+                return t != null ? String(t) : "";
+              })
+              .filter(function (s) {
+                return s !== "";
+              })
+              .join(", ")
+          : "";
+      }
+      if (topicSel) {
+        fillTopicSelect(topicSel, topicVal).then(function () {
+          if (topicSel) topicSel.value = topicVal;
+        });
+      }
     }
 
     el.classList.remove("hidden");
@@ -1383,6 +2000,7 @@
   }
 
   function clearJokeDetailAndBack(el, mc) {
+    _pendingSourceIdeaId = null;
     el.classList.add("hidden");
     el.innerHTML = "";
     window.currentJokeId = null;
@@ -1390,105 +2008,9 @@
     if (mc) mc.classList.remove("is-detail-view");
   }
 
-  /**
-   * Unified joke detail editor opened from an idea "Convert" action.
-   */
-  function showJokeDetailFromIdeaConversion() {
-    var el = getJokeDetailEl();
-    var mc = document.getElementById("modal-container");
-    if (mc) mc.classList.add("is-detail-view");
-    setJokesDetailVisibility(true);
-    el.dataset.jokeId = "";
-    el.dataset.jokeNewFromIdea = "1";
-    window.currentJokeId = null;
-
-    var emptyJoke = { title: "", content: "", act_out: "", premise: "", punchline: "", setup_notes: "", tags: [], status: "draft", rating: "", duration: "" };
-    var snap = pendingConversionIdea;
-    if (snap) {
-      if (snap.title != null) emptyJoke.title = snap.title;
-      if (snap.premise != null) {
-        emptyJoke.content = snap.premise;
-        emptyJoke.premise = snap.premise;
-      }
-      if (snap.notes != null) emptyJoke.setup_notes = snap.notes;
-      if (Array.isArray(snap.tags)) emptyJoke.tags = snap.tags.slice();
-    }
-    renderUniversalDetail("joke", emptyJoke, { el: el, hideDelete: true });
-    setJokeHeaderTitleFromData(emptyJoke.title);
-    toggleJokeAdmin(false);
-
-    var topicPref = snap && snap.topic != null ? snap.topic : "";
-    var topicEl = document.getElementById("joke-edit-topic");
-    fillTopicSelect(topicEl, topicPref).then(function () {
-      if (topicEl) topicEl.value = topicPref || "";
-    });
-
-    function restoreJokesChrome() {
-      delete el.dataset.jokeNewFromIdea;
-      clearJokeDetailAndBack(el, mc);
-    }
-    el._returnToJokeList = restoreJokesChrome;
-
-    var jokeBackConv = document.getElementById("joke-back-btn");
-    if (jokeBackConv) {
-      jokeBackConv.onclick = function () {
-        restoreJokesChrome();
-        clearPendingConversion();
-        openModal("ideas");
-        returnToIdeaList();
-      };
-    }
-
-    var moreBtnConv = document.getElementById("joke-detail-more-btn");
-    if (moreBtnConv) moreBtnConv.addEventListener("click", function () { toggleJokeAdmin(); });
-
-    document.getElementById("joke-detail-save-btn").addEventListener("click", function () {
-      var tagsInput = document.getElementById("joke-edit-tags");
-      var tagsVal = tagsInput ? tagsInput.value.trim() : "";
-      var durationInput = document.getElementById("joke-edit-duration");
-      var durationVal = durationInput && durationInput.value.trim() !== "" ? parseInt(durationInput.value.trim(), 10) : null;
-      if (durationVal !== null && (isNaN(durationVal) || durationVal < 0)) durationVal = null;
-      var addPayload = {
-        title: document.getElementById("joke-edit-title").value.trim() || null,
-        premise: readJokePremiseFromForm(),
-        punchline: readJokePunchlineFromForm(),
-        status: document.getElementById("joke-edit-status").value,
-        setup_notes: document.getElementById("joke-edit-setup_notes") ? document.getElementById("joke-edit-setup_notes").value.trim() || null : null,
-        topic: document.getElementById("joke-edit-topic") ? document.getElementById("joke-edit-topic").value.trim() || null : null,
-        tags: tagsVal ? tagsVal.split(",").map(function (t) { return t.trim(); }).filter(Boolean) : [],
-        rating: (function () { var r = document.getElementById("joke-edit-rating"); var v = r ? r.value : ""; return v ? parseInt(v, 10) : null; })(),
-        duration: durationVal
-      };
-      if (!addPayload.title) return;
-      var addFn = dataLayer && dataLayer.addJoke ? dataLayer.addJoke.bind(dataLayer) : null;
-      if (!addFn) {
-        addFn = function (d) {
-          return apiFetch("/jokes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d) }).then(function (r) {
-            if (!r.ok) throw new Error("Save failed");
-            return r.json();
-          });
-        };
-      }
-      addFn(addPayload)
-        .then(function (created) {
-          return finishNewJokeAfterMoveFromIdea(created);
-        })
-        .then(function (created) {
-          restoreJokesChrome();
-          loadIdeas();
-          loadJokes(created.id);
-        })
-        .catch(function () {});
-    });
-
-    focusJokeBodyIfEmpty();
-    return Promise.resolve();
-  }
-
   function showJokeDetail(id) {
     if (id == null || id === "") {
-      if (!pendingConversionId || !pendingConversionIdea) return Promise.resolve();
-      return showJokeDetailFromIdeaConversion();
+      return Promise.resolve();
     }
     var jokeP = dataLayer ? dataLayer.getJoke(id) : apiFetch("/jokes/" + id).then(function (r) { return r.json(); });
     return jokeP
@@ -1497,7 +2019,6 @@
         var mc = document.getElementById("modal-container");
         if (mc) mc.classList.add("is-detail-view");
         var el = getJokeDetailEl();
-        var listEl = getJokeListEl();
         setJokesDetailVisibility(true);
         el.dataset.jokeId = j.id != null ? String(j.id) : "";
         window.currentJokeId = j.id;
@@ -1532,55 +2053,61 @@
           if (topicEl) topicEl.value = topicSnap;
         });
 
-        function returnToJokeList() {
-          clearJokeDetailAndBack(el, mc);
-        }
-        el._returnToJokeList = returnToJokeList;
-
-        el.querySelector("#joke-detail-save-btn").addEventListener("click", function () {
-          var saveBtn = el.querySelector("#joke-detail-save-btn");
-          var tagsInput = document.getElementById("joke-edit-tags");
-          var tagsVal = tagsInput ? tagsInput.value.trim() : "";
-          var durationInput = document.getElementById("joke-edit-duration");
-          var durationVal = durationInput && durationInput.value.trim() !== "" ? parseInt(durationInput.value.trim(), 10) : null;
-          if (durationVal !== null && (isNaN(durationVal) || durationVal < 0)) durationVal = null;
-          var payload = {
-            title: document.getElementById("joke-edit-title").value.trim() || null,
-            premise: readJokePremiseFromForm(),
-            punchline: readJokePunchlineFromForm(),
-            status: document.getElementById("joke-edit-status").value,
-            setup_notes: document.getElementById("joke-edit-setup_notes") ? document.getElementById("joke-edit-setup_notes").value.trim() || null : undefined,
-            topic: document.getElementById("joke-edit-topic") ? document.getElementById("joke-edit-topic").value.trim() || null : undefined,
-            tags: tagsVal ? tagsVal.split(",").map(function (t) { return t.trim(); }).filter(Boolean) : [],
-            rating: (function () { var r = document.getElementById("joke-edit-rating"); var v = r ? r.value : ""; return v ? parseInt(v, 10) : null; })(),
-            duration: durationVal
-          };
-          if (!payload.title) return;
-          var updateP = dataLayer
-            ? dataLayer.updateJoke(j.id, payload)
-            : apiFetch("/jokes/" + j.id, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }).then(function (r) { if (!r.ok) throw new Error("Update failed"); return r.json(); });
-          updateP.then(function (updated) {
-              if (updated) {
-                j = updated;
-                window.currentJokeId = j.id;
-              }
-              loadJokes();
-              setJokesDetailVisibility(false);
-              if (!saveBtn) return;
-              saveBtn.classList.add("btn-save-success");
-              saveBtn.textContent = "Saved! ✓";
-              window.setTimeout(function () {
-                saveBtn.classList.remove("btn-save-success");
-                saveBtn.textContent = "Save";
-              }, 1500);
-            })
-            .catch(function () {});
-        });
-        var moreBtn = document.getElementById("joke-detail-more-btn");
-        if (moreBtn) moreBtn.addEventListener("click", function () { toggleJokeAdmin(); });
-
-        focusJokeBodyIfEmpty();
+        bindJokeDetailActions(el, mc, {});
       });
+  }
+
+  function openNewJokeDetail() {
+    setJokesFilterSidebarOpen(false);
+    var mc = document.getElementById("modal-container");
+    if (mc) mc.classList.add("is-detail-view");
+    var el = getJokeDetailEl();
+    if (!el) return;
+    setJokesDetailVisibility(true);
+    el.dataset.jokeId = "";
+    window.currentJokeId = null;
+
+    renderUniversalDetail(
+      "joke",
+      {
+        title: "",
+        content: "",
+        act_out: "",
+        premise: "",
+        punchline: "",
+        status: "draft",
+        rating: "",
+        setup_notes: "",
+        tags: [],
+        duration: null
+      },
+      { el: el, hideDelete: true }
+    );
+
+    var titleInput = getJokeEditTitleEl();
+    if (titleInput) titleInput.value = "";
+    toggleJokeAdmin(false);
+    var topicEl = document.getElementById("joke-edit-topic");
+    var topicSnap = "";
+    fillTopicSelect(topicEl, topicSnap).then(function () {
+      if (topicEl) topicEl.value = topicSnap;
+    });
+
+    var setTrig = el.querySelector(".btn-set-trigger");
+    if (setTrig) {
+      setTrig.disabled = true;
+      setTrig.setAttribute("aria-disabled", "true");
+      setTrig.title = "Save the joke first to add to a set";
+    }
+
+    bindJokeDetailActions(el, mc, { skipBodyFocus: true });
+
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        var ti = getJokeEditTitleEl();
+        if (ti) ti.focus();
+      });
+    });
   }
 
   function renderSetsList(sets, optionalSelectSetId) {
@@ -1632,53 +2159,47 @@
     var normalizedFilter = filterText.trim().toLowerCase();
     var listEl = getIdeaListEl();
     if (!listEl) return Promise.resolve([]);
-    return (dataLayer ? dataLayer.listIdeas() : apiFetch("/ideas").then(function (r) { return r.json(); }))
-      .then(function (ideas) {
-        var list = Array.isArray(ideas) ? ideas : [];
-        var filteredIdeas = normalizedFilter
-          ? list.filter(function (idea) {
-              var title = idea && idea.title != null ? String(idea.title).toLowerCase() : "";
-              var content = idea && idea.content != null ? String(idea.content).toLowerCase() : "";
-              var notes = idea && idea.notes != null ? String(idea.notes).toLowerCase() : "";
-              return title.indexOf(normalizedFilter) >= 0 ||
-                content.indexOf(normalizedFilter) >= 0 ||
-                notes.indexOf(normalizedFilter) >= 0;
-            })
-          : list;
-        listEl.innerHTML = "";
-        if (list.length === 0) {
-          listEl.innerHTML = "<div class=\"list-empty\" role=\"status\">No ideas yet. Use the Add button above to create one.</div>";
-          updateDashboardStats();
-          return filteredIdeas;
-        }
-        if (filteredIdeas.length === 0) {
-          listEl.innerHTML = "<div class=\"list-empty neon-text-blue\" role=\"status\">No matching ideas found.</div>";
-          updateDashboardStats();
-          return filteredIdeas;
-        }
-        filteredIdeas.forEach(function (idea) {
-          listEl.appendChild(renderIdeaCard(idea));
-        });
-        var activeEl = document.activeElement;
-        var activeTag = activeEl && activeEl.tagName ? String(activeEl.tagName).toUpperCase() : "";
-        var isTypingField = activeTag === "INPUT" || activeTag === "TEXTAREA";
-        if (!isTypingField) {
-          schedulePanelFocus("new-idea-title-input");
-        }
-        updateDashboardStats();
-        return filteredIdeas;
-      })
-      .catch(function () {
-        listEl.innerHTML = "<div class=\"list-empty\" role=\"alert\">Could not load ideas. Is the server running?</div>";
-        updateDashboardStats();
-        return [];
-      });
+    var list = Array.isArray(_cache) ? _cache.filter(function (x) { return x && x.type === "idea"; }) : [];
+    var filteredIdeas = normalizedFilter
+      ? list.filter(function (idea) {
+          var title = idea && idea.title != null ? String(idea.title).toLowerCase() : "";
+          var content = idea && idea.content != null ? String(idea.content).toLowerCase() : "";
+          var notes = idea && idea.notes != null ? String(idea.notes).toLowerCase() : "";
+          return title.indexOf(normalizedFilter) >= 0 ||
+            content.indexOf(normalizedFilter) >= 0 ||
+            notes.indexOf(normalizedFilter) >= 0;
+        })
+      : list;
+    listEl.innerHTML = "";
+    if (list.length === 0) {
+      listEl.innerHTML = "<div class=\"list-empty\" role=\"status\">No ideas yet. Use the Add button above to create one.</div>";
+      updateDashboardStats();
+      return Promise.resolve(filteredIdeas);
+    }
+    if (filteredIdeas.length === 0) {
+      listEl.innerHTML = "<div class=\"list-empty neon-text-blue\" role=\"status\">No matching ideas found.</div>";
+      updateDashboardStats();
+      return Promise.resolve(filteredIdeas);
+    }
+    filteredIdeas.forEach(function (idea) {
+      listEl.appendChild(renderIdeaCard(idea));
+    });
+    var activeEl = document.activeElement;
+    var activeTag = activeEl && activeEl.tagName ? String(activeEl.tagName).toUpperCase() : "";
+    var isTypingField = activeTag === "INPUT" || activeTag === "TEXTAREA";
+    if (!isTypingField) {
+      schedulePanelFocus("new-idea-title-input");
+    }
+    updateDashboardStats();
+    return Promise.resolve(filteredIdeas);
   }
 
   function loadIdeas() {
     var ideaSearchInput = document.getElementById("idea-search-input");
     var filterValue = ideaSearchInput ? ideaSearchInput.value : "";
-    return renderIdeas(filterValue);
+    return refreshCache().then(function () {
+      return renderIdeas(filterValue);
+    });
   }
 
   /** Exit idea detail overlay only: reveal list behind, do not close workstation or change tab. */
@@ -1831,7 +2352,7 @@
     (dataLayer ? dataLayer.deleteIdea(ideaId) : apiFetch("/ideas/" + ideaId, { method: "DELETE" }))
       .then(function (r) {
         if (r && r.ok === false) throw new Error("Delete failed");
-        loadIdeas();
+        return refreshCache();
       })
       .catch(function () {});
   }
@@ -2526,50 +3047,13 @@
       "<div class=\"detail-field-value\">" + escapeHtml(display) + "</div></div>";
   }
 
-  function syncJokesModalFilterStateFromDOM() {
-    var topicEl = document.getElementById("joke-filter-topic");
-    var statusEl = document.getElementById("joke-filter-status");
-    var searchEl = document.getElementById("joke-search");
-    var sortEl = document.getElementById("joke-sort");
-    jokesModalFilterState.topic = topicEl ? (topicEl.value || "all") : "all";
-    jokesModalFilterState.status = statusEl ? (statusEl.value || "all") : "all";
-    jokesModalFilterState.query = searchEl ? (searchEl.value || "") : "";
-    jokesModalFilterState.sortBy = sortEl ? (sortEl.value || "newest") : "newest";
-  }
-
   function initJokesModalDelegation() {
     var modal = getJokesPanelEl();
     if (!modal) return;
-    modal.addEventListener("input", function (e) {
-      if (e.target.id === "joke-search") {
-        syncJokesModalFilterStateFromDOM();
-        renderJokeList();
-      }
-    });
-    modal.addEventListener("change", function (e) {
-      var id = e.target.id;
-      if (id === "joke-filter-topic" || id === "joke-filter-status" || id === "joke-sort") {
-        syncJokesModalFilterStateFromDOM();
-        renderJokeList();
-      }
-    });
     modal.addEventListener("click", function (e) {
       var target = e.target;
       var actionEl = target.closest("[data-action]");
       var action = actionEl ? actionEl.getAttribute("data-action") : null;
-      if (action === "open-add-form") {
-        openAddJokeModal();
-        return;
-      }
-      if (action === "save-joke") {
-        e.preventDefault();
-        handleJokeSave();
-        return;
-      }
-      if (action === "cancel-add") {
-        closeAddJokeModal();
-        return;
-      }
       if (action === "open-set-picker") {
         e.preventDefault();
         e.stopPropagation();
@@ -2588,12 +3072,8 @@
         return;
       }
       if (target.id === "joke-back-btn" || target.id === "joke-detail-back-btn" || (target.classList.contains("detail-back-btn") && getJokeDetailEl() && getJokeDetailEl().contains(target))) {
-        var detailEl = getJokeDetailEl();
-        if (detailEl && detailEl.dataset.jokeNewFromIdea === "1") {
-          exitJokeConversionToIdea();
-          return;
-        }
-        if (detailEl && detailEl._returnToJokeList) detailEl._returnToJokeList();
+        var detailElBack = getJokeDetailEl();
+        if (detailElBack && detailElBack._returnToJokeList) detailElBack._returnToJokeList();
         return;
       }
       if (target.closest("[data-action=\"open-set-picker\"]")) return;
@@ -2622,102 +3102,6 @@
         }
       }
     });
-  }
-
-  function getAddJokeFormContainer() {
-    return document.getElementById("jokes-add-form-container");
-  }
-
-  function openAddJokeModal() {
-    var container = getAddJokeFormContainer();
-    if (!container) return;
-    var listEl = getJokeListEl();
-    var toolbarEl = getJokesToolbarEl();
-    if (toolbarEl) toolbarEl.style.display = "none";
-    if (listEl) listEl.style.display = "none";
-    setJokesNavHeaderRowVisible(false);
-    container.innerHTML =
-      "<h3>Add Joke</h3>" +
-      "<div class=\"form-group\">" +
-      "<p class=\"detail-label\">Title</p>" +
-      "<input type=\"text\" id=\"jokes-add-form-title\" placeholder=\"Title *\" maxlength=\"500\">" +
-      "</div>" +
-      "<div class=\"form-group\">" +
-      "<p class=\"detail-label\">Content</p>" +
-      "<textarea id=\"jokes-add-form-content\" placeholder=\"Body / premise...\" rows=\"4\" maxlength=\"2000\"></textarea>" +
-      "</div>" +
-      "<div class=\"form-group\">" +
-      "<p class=\"detail-label\">Topic</p>" +
-      "<select id=\"jokes-add-form-topic\" class=\"topic-select-global\"><option value=\"\">—</option></select>" +
-      "</div>" +
-      "<div class=\"form-group\">" +
-      "<p class=\"detail-label\">Tags (comma-separated)</p>" +
-      "<input type=\"text\" id=\"jokes-add-form-tags\" placeholder=\"e.g. observational, crowd work\" list=\"tag-datalist\">" +
-      "</div>" +
-      "<div class=\"form-group\">" +
-      "<p class=\"detail-label\">Duration (seconds, optional)</p>" +
-      "<input type=\"number\" id=\"jokes-add-form-duration\" min=\"0\" step=\"1\" placeholder=\"e.g. 90\">" +
-      "</div>" +
-      "<div class=\"modal-actions\">" +
-      "<button type=\"button\" data-action=\"save-joke\" class=\"btn-primary btn-3d\">Save</button>" +
-      "<button type=\"button\" data-action=\"cancel-add\" class=\"btn-primary btn-3d\">Back</button>" +
-      "</div>";
-    var titleInput = document.getElementById("jokes-add-form-title");
-    var topicSelect = document.getElementById("jokes-add-form-topic");
-    if (titleInput) titleInput.value = "";
-    fillTopicSelect(topicSelect, "");
-    container.classList.remove("hidden");
-    if (titleInput) {
-      setTimeout(function () {
-        titleInput.focus();
-      }, 50);
-    }
-  }
-
-  function closeAddJokeModal() {
-    var container = getAddJokeFormContainer();
-    if (container) {
-      container.classList.add("hidden");
-      container.innerHTML = "";
-    }
-    var listEl = getJokeListEl();
-    var toolbarEl = getJokesToolbarEl();
-    if (toolbarEl) toolbarEl.style.display = "";
-    if (listEl) listEl.style.display = "";
-    setJokesNavHeaderRowVisible(true);
-  }
-
-  function handleJokeSave() {
-    var titleEl = document.getElementById("jokes-add-form-title");
-    var contentEl = document.getElementById("jokes-add-form-content");
-    var topicEl = document.getElementById("jokes-add-form-topic");
-    var tagsEl = document.getElementById("jokes-add-form-tags");
-    var durationEl = document.getElementById("jokes-add-form-duration");
-    var title = titleEl ? titleEl.value.trim() : "";
-    if (!title) return;
-    var content = contentEl ? contentEl.value.trim() : "";
-    var topic = topicEl ? topicEl.value.trim() || null : null;
-    var tagsStr = tagsEl ? tagsEl.value.trim() : "";
-    var tags = tagsStr ? tagsStr.split(",").map(function (t) { return t.trim(); }).filter(Boolean) : [];
-    var durationVal = durationEl && durationEl.value.trim() !== "" ? parseInt(durationEl.value.trim(), 10) : null;
-    if (durationVal !== null && (isNaN(durationVal) || durationVal < 0)) durationVal = null;
-    var payload = { title: title, premise: content, punchline: "", status: "draft", topic: topic, tags: tags, duration: durationVal };
-    var addFn = window.dataLayer && window.dataLayer.addJoke ? window.dataLayer.addJoke.bind(window.dataLayer) : null;
-    if (!addFn) {
-      addFn = function (data) {
-        return apiFetch("/jokes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: data.title, premise: data.premise || "", punchline: "", status: "draft" }) }).then(function (r) { if (!r.ok) throw new Error("Save failed"); return r.json(); });
-      };
-    }
-    addFn(payload)
-      .then(function (created) {
-        return finishNewJokeAfterMoveFromIdea(created);
-      })
-      .then(function (created) {
-        closeAddJokeModal();
-        showPanel("jokes", true);
-        loadJokes(created.id);
-      })
-      .catch(function () { alert("Could not save. Try again."); });
   }
 
   var createSetBtn = document.getElementById("create-set");
@@ -2763,96 +3147,29 @@
 
   function syncOnOnline() {
     if (!dataLayer) return;
-    loadIdeas();
-    loadJokes();
-    loadSets();
+    refreshCache()
+      .catch(function () {})
+      .then(function () {
+        loadSets();
+      });
   }
 
   function initApp() {
+    var pickerKick = document.getElementById("settings-accent-color");
+    try {
+      if (pickerKick && !localStorage.getItem(STAGETIME_ACCENT_KEY)) {
+        pickerKick.value = "#00f2ff";
+        setAccentColor("#00f2ff");
+      }
+    } catch (eKick) {}
     initStorageNoticeDismiss();
     checkStorageNotice();
     window.addEventListener("online", syncOnOnline);
-    var ideasHubButton = Array.prototype.find.call(
-      document.querySelectorAll(".hub-drawer"),
-      function (btn) {
-        return (btn.textContent || "").trim().toLowerCase() === "ideas";
-      }
-    );
-    if (ideasHubButton) {
-      ideasHubButton.dataset.ideasHubWired = "1";
-      ideasHubButton.addEventListener("click", function () {
-        var modalContainer = document.getElementById("modal-container");
-        var newIdeaTitleInput = document.getElementById("new-idea-title-input");
-        showPanel("ideas");
-        /* Keep #modal-container hidden for list view so it cannot block clicks on idea rows */
-        if (modalContainer) {
-          modalContainer.classList.add("hidden");
-          modalContainer.setAttribute("aria-hidden", "true");
-        }
-        openModal("ideas");
-        if (newIdeaTitleInput && typeof newIdeaTitleInput.focus === "function") {
-          setTimeout(function () {
-            newIdeaTitleInput.focus();
-          }, 50);
-        }
-      });
-    }
-    var jokesHubButton = Array.prototype.find.call(
-      document.querySelectorAll(".hub-drawer"),
-      function (btn) {
-        return (btn.textContent || "").trim().toLowerCase() === "jokes";
-      }
-    );
-    if (jokesHubButton) {
-      jokesHubButton.addEventListener("click", function () {
-        openModal("jokes");
-      });
-    }
-    var setsHubButton = Array.prototype.find.call(
-      document.querySelectorAll(".hub-drawer"),
-      function (btn) {
-        return (btn.textContent || "").trim().toLowerCase() === "sets";
-      }
-    );
-    if (setsHubButton) {
-      setsHubButton.addEventListener("click", function () {
-        openModal("sets");
-      });
-    }
-    var settingsHubButton = Array.prototype.find.call(
-      document.querySelectorAll(".hub-drawer"),
-      function (btn) {
-        return (btn.textContent || "").trim().toLowerCase() === "settings";
-      }
-    );
-    if (settingsHubButton) {
-      settingsHubButton.addEventListener("click", function () {
-        openModal("settings");
-      });
-    }
     document.querySelectorAll(".tab").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var tab = btn.getAttribute("data-tab");
-        if (tab === "ideas" && window.pendingConversionId) {
-          return;
-        }
         openModal(tab);
         if (tab === "ideas") {
-          if (pendingConversionId && getJokeDetailEl() && getJokeDetailEl().dataset.jokeNewFromIdea === "1") {
-            var jl = getJokeListEl();
-            var jt = getJokesToolbarEl();
-            if (jl) jl.style.display = "";
-            if (jt) jt.style.display = "";
-            var jDet = getJokeDetailEl();
-            if (jDet) {
-              jDet.classList.add("hidden");
-              jDet.innerHTML = "";
-              delete jDet.dataset.jokeNewFromIdea;
-            }
-            var mcr = document.getElementById("modal-container");
-            if (mcr) mcr.classList.remove("is-detail-view");
-          }
-          clearPendingConversion();
           returnToIdeaList();
           loadIdeas();
           fillDatalists();
@@ -2898,32 +3215,14 @@
       if (!setsPanel || setsPanel.classList.contains("hidden")) return;
       showSetDetail(setId);
     });
-    loadIdeas();
-    loadJokes();
-    loadSets();
-    var ideasHubDrawerAfterInit = Array.prototype.find.call(
-      document.querySelectorAll(".hub-drawer"),
-      function (btn) {
-        return (btn.textContent || "").trim().toLowerCase() === "ideas";
-      }
-    );
-    if (ideasHubDrawerAfterInit && ideasHubDrawerAfterInit.dataset.ideasHubWired !== "1") {
-      ideasHubDrawerAfterInit.dataset.ideasHubWired = "1";
-      ideasHubDrawerAfterInit.addEventListener("click", function () {
-        var modalContainer = document.getElementById("modal-container");
-        var newIdeaTitleInput = document.getElementById("new-idea-title-input");
-        showPanel("ideas");
-        openModal("ideas");
-        if (modalContainer) modalContainer.classList.add("hidden");
-        if (newIdeaTitleInput && typeof newIdeaTitleInput.focus === "function") {
-          setTimeout(function () {
-            newIdeaTitleInput.focus();
-          }, 50);
-        }
+    refreshCache()
+      .catch(function () {})
+      .then(function () {
+        loadSets();
       });
-    }
     initModals();
     initJokesModalDelegation();
+    initJokesFolderChrome();
     initSetsPanelDelegation();
     fillDatalists();
     // Default to dashboard on load.
@@ -3141,11 +3440,16 @@
         if (!btn || !ideaActionShell.contains(btn)) return;
         if (btn.id === "idea-detail-btn-convert") {
           var curCv = ideaActionShell._currentIdea;
-          if (!curCv) return;
-          setPendingConversion(curCv);
-          closeIdeaDetailModal();
-          openModal("jokes");
-          showJokeDetail(null);
+          if (!curCv || curCv.id == null) return;
+          var convBtn = btn;
+          convBtn.disabled = true;
+          convertToJoke(curCv.id)
+            .catch(function () {
+              showToast("Could not convert idea.", "#8b0000");
+            })
+            .then(function () {
+              convBtn.disabled = false;
+            });
           return;
         }
         if (btn.getAttribute("data-action") === "update-idea-field") {
@@ -3230,6 +3534,10 @@
   }
 
   function fillDatalists() {
+    if (Array.isArray(_cache) && _cache.length > 0) {
+      updateGlobalTagDatalistFromCache();
+      return;
+    }
     var tagDl = document.getElementById("tag-datalist");
     if (!dataLayer) return;
     if (tagDl && dataLayer.getAllTags) {
@@ -3484,6 +3792,7 @@
   function runWhenReady() {
     initAccent();
     bindSettingsAccentControl();
+    bindSettingsAccentPresets();
     initAuthForm();
     try { localStorage.setItem("stagetime_storage", "local"); } catch (e) {}
     var appShell = document.getElementById("app-container");
@@ -3500,7 +3809,7 @@
       panelHomeReady.classList.remove("hidden");
       panelHomeReady.style.display = "flex";
     }
-    initHomeStatusSlicer();
+    initHubSmartSlicer();
     initApp();
     initUpdateCheck();
     loadJokes();
@@ -3516,9 +3825,15 @@
     var titleInput = document.getElementById("modal-idea-title");
     var contentInput = document.getElementById("idea-focus-content");
     var notesInput = document.getElementById("idea-focus-notes");
+    var topicInput = document.getElementById("idea-edit-topic");
+    var tagsInput = document.getElementById("idea-edit-tags");
     var title = titleInput ? String(titleInput.textContent || "").trim() : "";
     var content = contentInput ? String(contentInput.value || "") : "";
     var notes = notesInput ? String(notesInput.value || "") : "";
+    var topicRaw = topicInput ? String(topicInput.value || "").trim() : "";
+    var topic = topicRaw !== "" ? topicRaw : "Uncategorized";
+    var tagsStr = tagsInput ? String(tagsInput.value || "").trim() : "";
+    var tags = tagsStr ? tagsStr.split(",").map(function (t) { return t.trim(); }).filter(Boolean) : [];
     if (!title) return Promise.resolve();
     var ideaListEl = getIdeaListEl ? getIdeaListEl() : document.getElementById("idea-list");
     var priorScrollTop = ideaListEl ? ideaListEl.scrollTop : 0;
@@ -3532,7 +3847,9 @@
     return dataLayer.updateIdea(id, {
       title: title,
       content: content,
-      notes: notes
+      notes: notes,
+      topic: topic,
+      tags: tags
     }).then(function (updated) {
       var modalContainer = document.getElementById("modal-container");
       var ideasPanelSave = document.getElementById("panel-ideas");
@@ -3541,20 +3858,26 @@
       if (ideasPanelSave && updated) ideasPanelSave._currentIdea = updated;
       if (ideaDetSave && updated) ideaDetSave._currentIdea = updated;
       setIdeasPanelTitle(title);
-      loadIdeas();
-      closeModal();
-      showPanel("ideas");
-      setTimeout(function () {
-        var refreshedIdeaListEl = getIdeaListEl ? getIdeaListEl() : document.getElementById("idea-list");
-        if (!refreshedIdeaListEl) return;
-        if (priorActiveId != null) {
-          refreshedIdeaListEl.querySelectorAll(".idea-item").forEach(function (x) { x.classList.remove("active"); });
-          var priorActive = refreshedIdeaListEl.querySelector('.idea-item[data-id="' + priorActiveId + '"]');
-          if (priorActive) priorActive.classList.add("active");
-        }
-        refreshedIdeaListEl.scrollTop = priorScrollTop;
-      }, 0);
-      return updated;
+      return refreshCache()
+        .then(function () {
+          var ideaSearchInput = document.getElementById("idea-search-input");
+          return renderIdeas(ideaSearchInput ? ideaSearchInput.value : "");
+        })
+        .then(function () {
+          closeModal();
+          showPanel("ideas");
+          setTimeout(function () {
+            var refreshedIdeaListEl = getIdeaListEl ? getIdeaListEl() : document.getElementById("idea-list");
+            if (!refreshedIdeaListEl) return;
+            if (priorActiveId != null) {
+              refreshedIdeaListEl.querySelectorAll(".idea-item").forEach(function (x) { x.classList.remove("active"); });
+              var priorActive = refreshedIdeaListEl.querySelector('.idea-item[data-id="' + priorActiveId + '"]');
+              if (priorActive) priorActive.classList.add("active");
+            }
+            refreshedIdeaListEl.scrollTop = priorScrollTop;
+          }, 0);
+          return updated;
+        });
     }).catch(function () {});
   }
 
@@ -3612,30 +3935,6 @@
       if (e.key === "Enter") {
         e.preventDefault();
         wsCreateSetBtn.click();
-      }
-    });
-  }
-
-  var wsCreateJokeBtn = document.getElementById("create-joke-btn");
-  var wsJokeInput = document.getElementById("new-joke-title-input");
-  if (wsCreateJokeBtn && wsJokeInput && wsCreateJokeBtn.dataset.wsBound !== "1") {
-    wsCreateJokeBtn.dataset.wsBound = "1";
-    wsCreateJokeBtn.addEventListener("click", function (e) {
-      e.preventDefault();
-      var wsJokeTitle = wsJokeInput.value.trim();
-      if (!wsJokeTitle) return;
-      dataLayer.addJoke({ title: wsJokeTitle, premise: "", punchline: "", status: "draft" }).then(function (created) {
-        wsJokeInput.value = "";
-        loadJokes();
-        if (created && created.id != null) {
-          showJokeDetail(created.id);
-        }
-      });
-    });
-    wsJokeInput.addEventListener("keypress", function (e) {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        wsCreateJokeBtn.click();
       }
     });
   }
@@ -3730,9 +4029,6 @@
       panelHome.classList.remove("hidden");
       panelHome.style.display = "flex";
     }
-    document.querySelectorAll(".hub-drawer[data-folder]").forEach(function (b) {
-      b.classList.remove("active");
-    });
     if (document.body) document.body.classList.remove("panel-open");
     var navPillGo = document.getElementById("nav-command-pill");
     if (navPillGo) {
@@ -3749,7 +4045,10 @@
   window.editJoke = function (id) {
     return showJokeDetail(id);
   };
+  window.openNewJokeDetail = openNewJokeDetail;
   window.fetchJokesForModal = fetchJokesForModal;
+  window.refreshCache = refreshCache;
+  window.convertToJoke = convertToJoke;
   window.saveIdea = saveIdea;
   window.deleteCurrentItem = function () {
     var modalContainer = document.getElementById("modal-container");
@@ -3775,7 +4074,6 @@
     }
     var jokeEl = getJokeDetailEl();
     if (!jokeEl || jokeEl.classList.contains("hidden")) return;
-    if (jokeEl.dataset.jokeNewFromIdea === "1") return;
     var delBtn = jokeEl.querySelector("#joke-delete-btn");
     if (delBtn && delBtn.classList.contains("hidden")) return;
     var jokeIdRaw = jokeEl.dataset.jokeId;
@@ -3796,8 +4094,6 @@
     closeIdeaDetailModal();
   };
   window.showIdeaDetail = showIdeaDetail;
-  window.exitJokeConversionToIdea = exitJokeConversionToIdea;
-  window.finishNewJokeAfterMoveFromIdea = finishNewJokeAfterMoveFromIdea;
   window.openSetPicker = openSetPicker;
   window.addItemToSet = addItemToSetUnified;
   window.showAddToSetModal = function (id, itemType) { return openSetPicker(id, itemType || "joke"); };

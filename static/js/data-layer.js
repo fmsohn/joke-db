@@ -76,9 +76,18 @@
     return apiFetch("/ideas").then(function (r) { return r.json(); });
   }
 
+  function serverGetIdea(id) {
+    return apiFetch("/ideas/" + id).then(function (r) { return r.json(); });
+  }
+
   function serverAddIdea(ideaOrContent) {
     var payload = typeof ideaOrContent === "object" && ideaOrContent !== null
-      ? { title: ideaOrContent.title != null ? ideaOrContent.title : "", content: ideaOrContent.content != null ? ideaOrContent.content : "", tags: Array.isArray(ideaOrContent.tags) ? ideaOrContent.tags : [] }
+      ? {
+          title: ideaOrContent.title != null ? ideaOrContent.title : "",
+          content: ideaOrContent.content != null ? ideaOrContent.content : "",
+          topic: ideaOrContent.topic,
+          tags: Array.isArray(ideaOrContent.tags) ? ideaOrContent.tags : []
+        }
       : { title: ideaOrContent || "", content: "", tags: [] };
     return apiFetch("/ideas", {
       method: "POST",
@@ -102,11 +111,18 @@
     return apiFetch("/ideas/" + id, { method: "DELETE" }).then(function () {});
   }
 
-  function serverConvertIdeaToJoke(ideaId, title) {
+  function serverConvertIdeaToJoke(ideaId, title, extra) {
+    extra = extra || {};
     return apiFetch("/ideas/" + ideaId + "/convert", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: title || "", status: "draft" })
+      body: JSON.stringify({
+        title: title || "",
+        status: "draft",
+        content: extra.content != null ? extra.content : "",
+        topic: extra.topic,
+        tags: Array.isArray(extra.tags) ? extra.tags : []
+      })
     }).then(function (r) { return r.json(); });
   }
 
@@ -346,6 +362,12 @@
         : serverListIdeas();
     },
 
+    getIdea: function (id) {
+      return getStorageMode() === "local"
+        ? window.JokeDBLocal.getIdea(id)
+        : serverGetIdea(id);
+    },
+
     addIdea: function (ideaOrContent) {
       return getStorageMode() === "local"
         ? window.JokeDBLocal.addIdea(ideaOrContent)
@@ -364,10 +386,11 @@
         : serverDeleteIdea(id);
     },
 
-    convertIdeaToJoke: function (ideaId, title) {
+    convertIdeaToJoke: function (ideaId, title, extra) {
+      var localApi = window.JokeDBLocal || window.dataLayer;
       return getStorageMode() === "local"
-        ? window.JokeDBLocal.convertIdeaToJoke(ideaId, title)
-        : serverConvertIdeaToJoke(ideaId, title);
+        ? localApi.convertIdeaToJoke(ideaId, title, extra || {})
+        : serverConvertIdeaToJoke(ideaId, title, extra || {});
     },
 
     listSets: function () {

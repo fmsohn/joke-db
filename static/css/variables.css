@@ -56,6 +56,9 @@
   --z-slicer-stack: 10001;
   --z-nav-pill-stack: 10006;
   --z-set-picker: 10010;
+
+  --transition-speed: 0.32s;
+  --transition-timing: ease;
 }
 
 /* Accent is driven by window.setAccentColor (CSS vars on :root). */
@@ -204,7 +207,7 @@ html body #modal-container {
 }
 
 /* Home hub anchor (Step 4.1): centered column for logo + stats */
-#home-hub-v101 {
+#home-hub-v105 {
   display: flex;
   flex-direction: column;
   align-items: center;

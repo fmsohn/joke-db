@@ -23,7 +23,10 @@
     if (!row) return null;
     var resolvedType = type || row.type || "joke";
     var title = row.title != null ? String(row.title) : "";
-    var topic = row.topic != null ? row.topic : "Uncategorized";
+    var topic =
+      row.topic != null && String(row.topic).trim() !== ""
+        ? String(row.topic).trim()
+        : "Uncategorized";
     var tags = Array.isArray(row.tags) ? row.tags.slice() : [];
     if (resolvedType === "idea") {
       return {
@@ -261,12 +264,33 @@
     });
   }
 
-  function convertIdeaToJoke(ideaId, title) {
+  function convertIdeaToJoke(ideaId, title, extra) {
+    extra = extra || {};
     return getIdea(ideaId).then(function (idea) {
       if (!idea) return Promise.reject(new Error("Idea not found"));
-      var t = (title || idea.title || "").trim();
-      return addJoke({ title: t, content: "", act_out: "", status: "draft" }).then(function (joke) {
-        return deleteIdea(ideaId).then(function () { return joke; });
+      var overrideTitle = title != null && String(title).trim() !== "" ? String(title).trim() : "";
+      var mappedTitle = overrideTitle !== "" ? overrideTitle : String(idea.title != null ? idea.title : "").trim();
+      var baseContent = idea.content != null ? String(idea.content) : "";
+      var mappedContent = extra.content != null ? String(extra.content) : baseContent;
+      var ideaTopicRaw = idea.topic != null ? String(idea.topic).trim() : "";
+      var mappedTopic = ideaTopicRaw !== "" ? ideaTopicRaw : "Uncategorized";
+      if (extra.topic !== undefined && extra.topic !== null) {
+        var et = String(extra.topic).trim();
+        mappedTopic = et !== "" ? et : "Uncategorized";
+      }
+      var mappedTags = Array.isArray(extra.tags) ? extra.tags.slice() : (Array.isArray(idea.tags) ? idea.tags.slice() : []);
+      return addJoke({
+        title: mappedTitle,
+        content: mappedContent,
+        act_out: "",
+        status: "draft",
+        topic: mappedTopic,
+        tags: mappedTags,
+        rating: null
+      }).then(function (joke) {
+        return deleteIdea(ideaId).then(function () {
+          return joke;
+        });
       });
     });
   }
