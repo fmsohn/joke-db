@@ -4,20 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="theme-color" content="#050505">
-  <meta name="version" content="0.1.5">
+  <meta name="version" content="0.3.7">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="StageTime">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>StageTime</title>
   
-  <!-- Asset v105 — cache-bust with ASSET_VERSION + sw.js CACHE_NAME (app 0.1.5) -->
-  <link rel="icon" type="image/png" href="/static/icons/AppIcon.png?v=105">
-  <link rel="apple-touch-icon" href="/static/icons/AppIcon.png?v=105">
-  <link rel="manifest" href="/manifest.json?v=105">
+  <!-- Asset v127 — cache-bust with ASSET_VERSION + sw.js CACHE_NAME (app 0.3.7) -->
+  <link rel="icon" type="image/png" href="/static/icons/AppIcon.png?v=127">
+  <link rel="apple-touch-icon" href="/static/icons/AppIcon.png?v=127">
+  <link rel="manifest" href="/manifest.json?v=127">
   
-  <script>var ASSET_VERSION = "105";</script>
-  <link rel="stylesheet" href="/static/css/variables.css?v=105">
-  <link rel="stylesheet" href="/static/css/workstation.css?v=105">
+  <script>var ASSET_VERSION = "127";</script>
+  <link rel="stylesheet" href="/static/css/variables.css?v=127">
+  <link rel="stylesheet" href="/static/css/workstation.css?v=127">
 
   <script>
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
@@ -56,9 +56,6 @@
     <main id="main-content">
       <!-- IDEAS PANEL -->
       <section id="panel-ideas" class="panel folder-layer hidden" data-folder="ideas">
-        <div class="panel-topbar panel-topbar-title-only">
-          <h2 class="panel-title">Ideas</h2>
-        </div>
         <div id="ideas-workstation" class="panel-body">
           <div id="panel-ideas-list">
             <input type="text" id="idea-search-input" placeholder="Search ideas..." class="search-bar">
@@ -82,10 +79,15 @@
         <div class="panel-body">
           <div id="panel-jokes-list">
             <div id="jokes-folder-shell" class="jokes-folder-shell">
-              <div id="jokes-folder-top-row" class="jokes-folder-top-row">
-                <input type="search" id="jokes-search" class="jokes-folder-search search-bar" placeholder="Search jokes…" autocomplete="off" aria-label="Search jokes" role="searchbox">
-                <button type="button" id="jokes-new-btn" class="slab-btn">NEW JOKE</button>
-                <button type="button" id="jokes-filters-btn" class="slab-btn">FILTERS</button>
+              <div id="jokes-folder-top-row" class="jokes-folder-top-row joke-master-ribbon-row">
+                <div class="search-container">
+                  <input type="search" id="jokes-search" class="jokes-folder-search search-bar" placeholder="Search jokes…" autocomplete="off" aria-label="Search jokes" role="searchbox">
+                </div>
+                <button type="button" id="btn-filter-toggle" class="btn-ribbon" aria-label="Filters">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                  <span id="jokes-filter-active-count" class="btn-ribbon-filter-count" hidden></span>
+                </button>
+                <button type="button" id="btn-new-joke" class="btn-ribbon" aria-label="New joke">+Joke</button>
               </div>
               <div id="jokes-list-sidebar-wrap" class="jokes-list-sidebar-wrap">
                 <div id="jokes-sidebar-backdrop" class="jokes-sidebar-backdrop" aria-hidden="true"></div>
@@ -149,8 +151,8 @@
     </div>
   </div>
 
-  <script src="/static/js/dexie.min.js?v=105"></script>
-  <script src="/static/js/db.js?v=105"></script>
-  <script src="/static/js/app.js?v=105"></script>
+  <script src="/static/js/dexie.min.js?v=127"></script>
+  <script src="/static/js/db.js?v=127"></script>
+  <script src="/static/js/app.js?v=127"></script>
 </body>
 </html>

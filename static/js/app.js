@@ -6,11 +6,11 @@
   var emptyStageMessageTimerId = null;
 
   /** Bumped with releases; pair with index.html ASSET_VERSION + sw.js for cache/SW refresh. */
-  window.STAGETIME_APP_VERSION = "0.1.5";
+  window.STAGETIME_APP_VERSION = "0.3.7";
   window.currentJokeId = null;
   window.currentSetId = null;
-  // Cache-buster asset version: must match index.html ASSET_VERSION and ?v=... querystrings (Asset v105 / app 0.1.5).
-  var VERSION = typeof ASSET_VERSION !== "undefined" ? String(ASSET_VERSION) : "105";
+  // Cache-buster asset version: must match index.html ASSET_VERSION and ?v=... querystrings (Asset v127 / app 0.3.7).
+  var VERSION = typeof ASSET_VERSION !== "undefined" ? String(ASSET_VERSION) : "127";
   window.VERSION = VERSION;
   (function syncVersionFooter() {
     var el = document.getElementById("version-display");
@@ -130,10 +130,22 @@
   }
 
   function updateJokesFiltersButtonLabel() {
-    var btn = document.getElementById("jokes-filters-btn");
+    var btn = document.getElementById("btn-filter-toggle");
     if (!btn) return;
     var c = countActiveSlicerFilters();
-    btn.textContent = c > 0 ? "FILTERS (" + c + ")" : "FILTERS";
+    var label = c > 0 ? "Filters, " + c + " active" : "Filters";
+    btn.setAttribute("aria-label", label);
+    btn.setAttribute("title", label);
+    var badge = document.getElementById("jokes-filter-active-count");
+    if (badge) {
+      if (c > 0) {
+        badge.textContent = String(c);
+        badge.removeAttribute("hidden");
+      } else {
+        badge.textContent = "";
+        badge.setAttribute("hidden", "");
+      }
+    }
   }
 
   function renderSlicerIntoHost(host, topicFromJokesOnly) {
@@ -167,8 +179,8 @@
     var jokesInCache = (Array.isArray(_cache) ? _cache : []).filter(function (x) {
       return x && x.type === "joke";
     });
-    var statusOrder = ["draft", "testing", "active", "retired", "archived"];
-    var statusLabelMap = { draft: "DRAFT", testing: "TESTING", active: "ACTIVE", retired: "RETIRED", archived: "ARCHIVED" };
+    var statusOrder = ["draft", "testing", "active", "retired"];
+    var statusLabelMap = { draft: "DRAFT", testing: "TESTING", active: "ACTIVE", retired: "RETIRED" };
     var statusSeen = {};
     jokesInCache.forEach(function (j) {
       var st = j.status != null && String(j.status).trim() !== "" ? String(j.status).trim() : "draft";
@@ -371,12 +383,13 @@
     }
   }
 
+  /** Binds jokes folder ribbon controls. DOM order in #jokes-folder-top-row: .search-container, #btn-filter-toggle, #btn-new-joke (see index.html). */
   function initJokesFolderChrome() {
     var panel = document.getElementById("panel-jokes");
     if (!panel || panel.dataset.jokesFolderChromeBound === "1") return;
     panel.dataset.jokesFolderChromeBound = "1";
-    var filtersBtn = document.getElementById("jokes-filters-btn");
-    var newBtn = document.getElementById("jokes-new-btn");
+    var filtersBtn = document.getElementById("btn-filter-toggle");
+    var newBtn = document.getElementById("btn-new-joke");
     var backdrop = document.getElementById("jokes-sidebar-backdrop");
     var closeBtn = document.getElementById("jokes-sidebar-close");
     var clearBtn = document.getElementById("jokes-clear-filters-btn");
@@ -516,7 +529,7 @@
   }
 
   function getJokeAdminToggleBtnEl() {
-    return document.getElementById("joke-detail-more-btn");
+    return document.getElementById("joke-admin-toggle") || document.getElementById("joke-detail-more-btn");
   }
 
   function toggleJokeAdmin(forceVisible) {
@@ -525,7 +538,7 @@
     if (!fields) return;
     var show = typeof forceVisible === "boolean" ? forceVisible : fields.classList.contains("hidden");
     fields.classList.toggle("hidden", !show);
-    if (btn) btn.textContent = show ? "Less -" : "More +";
+    if (btn) btn.textContent = show ? "-" : "+";
   }
 
   window.toggleJokeAdmin = toggleJokeAdmin;
@@ -1050,8 +1063,8 @@
 
   var STAGETIME_ACCENT_KEY = "stagetime_accent_hex";
   var DEFAULT_ACCENT_HEX = "#00f2ff";
-  /** Preset chips in Settings (Steel Gray replaces pure black for visibility). */
-  var SETTINGS_ACCENT_PRESET_HEXES = ["#444444", "#00f2ff", "#e879f9", "#4ade80", "#fbbf24", "#fb7185"];
+  /** Preset chips in Settings. */
+  var SETTINGS_ACCENT_PRESET_HEXES = ["#fb7185", "#00f2ff", "#e879f9", "#4ade80", "#fbbf24"];
 
   function updateThemeColorMeta() {
     var meta = document.querySelector('meta[name="theme-color"]');
@@ -1523,7 +1536,7 @@
     if (list.length === 0) {
       var emptyMsg =
         jokesListCache.length === 0
-          ? "No jokes yet. Tap NEW JOKE above to create one."
+          ? "No jokes yet. Tap +Joke above to create one."
           : "No jokes match these filters. Adjust search or filters.";
       el.innerHTML = "<div class=\"list-empty\" role=\"status\">" + emptyMsg + "</div>";
       setJokesDetailVisibility(false);
@@ -1791,7 +1804,7 @@
       });
     }
 
-    var moreBtn = document.getElementById("joke-detail-more-btn");
+    var moreBtn = document.getElementById("joke-admin-toggle") || document.getElementById("joke-detail-more-btn");
     if (moreBtn) moreBtn.addEventListener("click", function () { toggleJokeAdmin(); });
 
     if (!skipBodyFocus) focusJokeBodyIfEmpty();
@@ -1861,38 +1874,39 @@
         "<div class=\"joke-master-ribbon-actions\">" +
         "<button type=\"button\" id=\"joke-back-btn\" class=\"slab-button detail-modal-close-btn\" onclick=\"window.closeModal(event)\" aria-label=\"Close\">×</button>" +
         "<button type=\"button\" class=\"slab-button btn-set-trigger\" onclick=\"window.openSetPicker(currentJokeId, 'joke')\">+SET</button>" +
+        "<button type=\"button\" id=\"joke-admin-toggle\" class=\"slab-button btn-more-options\">+</button>" +
         "<button type=\"button\" id=\"joke-detail-save-btn\" class=\"slab-button btn-save-joke\">Save</button>" +
         "<button type=\"button\" id=\"joke-delete-btn\" class=\"slab-button delete-btn" + (hideDelete ? " hidden" : "") + "\" onclick=\"window.deleteCurrentItem()\">DEL</button>" +
         "</div>" +
         "<div id=\"joke-admin-fields\" class=\"lab-accordion hidden joke-master-admin-below-actions\">" +
-        "<div class=\"joke-admin-fields-row\">" +
         "<div class=\"admin-metadata-row\">" +
-        "<div class=\"modal-form-row status-group joke-admin-field-grow\"><p class=\"detail-label\">STGE</p>" +
+        "<div class=\"status-group\"><p class=\"detail-label\">STGE</p>" +
         "<select id=\"joke-edit-status\" class=\"workstation-select\">" +
         "<option value=\"draft\">Draft</option>" +
         "<option value=\"testing\">Testing</option>" +
         "<option value=\"active\">Show</option>" +
         "<option value=\"retired\">Retired</option>" +
-        "<option value=\"archived\">Archived</option>" +
         "</select></div>" +
-        "<div class=\"modal-form-row rank-group joke-admin-field-compact joke-admin-field-center\"><p class=\"detail-label\">RK</p>" +
-        "<select id=\"joke-edit-rating\" class=\"workstation-select\">" +
-        "<option value=\"\"></option>" +
-        "<option value=\"1\">1</option><option value=\"2\">2</option><option value=\"3\">3</option><option value=\"4\">4</option><option value=\"5\">5</option>" +
+        "<div class=\"rank-group\"><p class=\"detail-label\">RK</p>" +
+        "<select id=\"joke-edit-rating\" class=\"workstation-select\" aria-label=\"Rank 1–5\">" +
+        "<option value=\"\">—</option>" +
+        "<option value=\"1\">1</option>" +
+        "<option value=\"2\">2</option>" +
+        "<option value=\"3\">3</option>" +
+        "<option value=\"4\">4</option>" +
+        "<option value=\"5\">5</option>" +
         "</select></div>" +
-        "<div class=\"modal-form-row dur-group joke-admin-field-compact joke-admin-field-center\"><p class=\"detail-label\">SEC</p>" +
-        "<input type=\"number\" id=\"joke-edit-duration\" class=\"live-edit-field\" min=\"0\" step=\"1\" value=\"\"></div>" +
-        "</div>" +
+        "<div class=\"dur-group\"><p class=\"detail-label\">SEC</p>" +
+        "<input type=\"number\" id=\"joke-edit-duration\" class=\"live-edit-field\" size=\"4\" min=\"0\" step=\"1\" value=\"\"></div>" +
         "</div>" +
         "<div class=\"joke-admin-fields-row\">" +
-        "<div class=\"modal-form-row joke-admin-field-grow\"><p class=\"detail-label\">Topic</p><select id=\"joke-edit-topic\" class=\"topic-select-global\"><option value=\"\">-</option></select></div>" +
-        "<div class=\"modal-form-row joke-admin-field-grow\"><p class=\"detail-label\">Tags</p>" +
+        "<div class=\"modal-form-row full-width-row\"><p class=\"detail-label\">Topic</p><select id=\"joke-edit-topic\" class=\"topic-select-global\"><option value=\"\">-</option></select></div>" +
+        "</div>" +
+        "<div class=\"joke-admin-fields-row\">" +
+        "<div class=\"modal-form-row full-width-row\"><p class=\"detail-label\">Tags</p>" +
         "<input type=\"text\" id=\"joke-edit-tags\" class=\"live-edit-field joke-master-tags\" list=\"tag-datalist\" value=\"\"></div>" +
         "</div>" +
         "<div class=\"modal-form-row\"><p class=\"detail-label\">Notes</p><textarea id=\"joke-edit-setup_notes\" class=\"live-edit-field\" rows=\"2\"></textarea></div>" +
-        "</div>" +
-        "<div class=\"joke-master-admin-toggle-row\">" +
-        "<button type=\"button\" id=\"joke-detail-more-btn\" class=\"slab-button btn-more-options\">+/-</button>" +
         "</div>" +
         "</div></div></div></div>";
 
@@ -2705,14 +2719,12 @@
     val = saveBtnIdVal;
     var saveBtnId = val != null ? String(val) : "";
     var editLabelVal = "Edit";
-    var stagetimeLabelVal = "Stagetime";
-    var backLabelVal = "\u2190 Back";
-    var deleteLabelVal = "Delete";
+    var stagetimeLabelHtml = "ST <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" style=\"margin-left: 2px; display: inline-block; vertical-align: middle;\"><path d=\"M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z\"></path><path d=\"M19 10v2a7 7 0 0 1-14 0v-2\"></path><line x1=\"12\" x2=\"12\" y1=\"19\" y2=\"22\"></line></svg>";
+    var backLabelVal = "X";
+    var deleteLabelVal = "DEL";
     var saveLabelVal = "Save";
     val = editLabelVal;
     var editLabel = val != null ? String(val) : "";
-    val = stagetimeLabelVal;
-    var stagetimeLabel = val != null ? String(val) : "";
     val = backLabelVal;
     var backLabel = val != null ? String(val) : "";
     val = deleteLabelVal;
@@ -2725,11 +2737,11 @@
     if (editOrder) {
       ribbonPrimaryHtml =
         "<button type=\"button\" id=\"" + saveBtnId + "\" data-btn-id=\"" + saveBtnId + "\" data-action=\"save-set\" class=\"slab-button set-detail-save-order-btn set-detail-ribbon-btn\"" + primaryDisabledAttr + ">" + escapeHtml(saveLabel) + "</button>" +
-        "<button type=\"button\" onclick=\"startStagetime()\" id=\"" + stagetimeBtnId + "\" data-btn-id=\"" + stagetimeBtnId + "\" data-action=\"start-stage\" class=\"btn-stagetime btn-primary btn-lift set-detail-stagetime-btn set-detail-ribbon-btn\">" + escapeHtml(stagetimeLabel) + "</button>";
+        "<button type=\"button\" onclick=\"startStagetime()\" id=\"" + stagetimeBtnId + "\" data-btn-id=\"" + stagetimeBtnId + "\" data-action=\"start-stage\" class=\"btn-stagetime btn-primary btn-lift set-detail-stagetime-btn set-detail-ribbon-btn\">" + stagetimeLabelHtml + "</button>";
     } else {
       ribbonPrimaryHtml =
         "<button type=\"button\" onclick=\"toggleEditSetOrder()\" id=\"" + editBtnId + "\" data-btn-id=\"" + editBtnId + "\" data-action=\"edit-set\" class=\"slab-button set-detail-edit-btn set-detail-ribbon-btn\">" + escapeHtml(editLabel) + "</button>" +
-        "<button type=\"button\" onclick=\"startStagetime()\" id=\"" + stagetimeBtnId + "\" data-btn-id=\"" + stagetimeBtnId + "\" data-action=\"start-stage\" class=\"btn-stagetime btn-primary btn-lift set-detail-stagetime-btn set-detail-ribbon-btn\">" + escapeHtml(stagetimeLabel) + "</button>";
+        "<button type=\"button\" onclick=\"startStagetime()\" id=\"" + stagetimeBtnId + "\" data-btn-id=\"" + stagetimeBtnId + "\" data-action=\"start-stage\" class=\"btn-stagetime btn-primary btn-lift set-detail-stagetime-btn set-detail-ribbon-btn\">" + stagetimeLabelHtml + "</button>";
     }
     var jokeOptions = allJokes.map(function (j) {
       j = j || {};
@@ -2749,11 +2761,10 @@
       "</div></div>";
     var ribbonHtml = "<div class=\"joke-master-footer ribbon set-detail-bottom-ribbon\">" +
       "<div class=\"joke-master-ribbon-row\">" +
-      "<div class=\"joke-master-ribbon-actions\">" + ribbonPrimaryHtml + "</div>" +
-      "<div class=\"ribbon-right-group\">" +
       "<button type=\"button\" id=\"" + backBtnId + "\" data-btn-id=\"" + backBtnId + "\" data-action=\"back\" class=\"slab-button detail-back-btn set-detail-ribbon-btn\">" + escapeHtml(backLabel) + "</button>" +
+      "<div class=\"joke-master-ribbon-actions\">" + ribbonPrimaryHtml + "</div>" +
       "<button type=\"button\" id=\"" + deleteBtnId + "\" data-btn-id=\"" + deleteBtnId + "\" data-action=\"delete-set\" class=\"slab-button btn-delete-inline set-detail-ribbon-btn\">" + escapeHtml(deleteLabel) + "</button>" +
-      "</div></div></div>";
+      "</div></div>";
     return "<div class=\"modal-detail-shell modal-detail-set set-detail-view detail-layout\">" +
       "<div class=\"set-detail-top-rail\">" +
       headerRow +
@@ -2813,6 +2824,9 @@
         }
 
         el.innerHTML = renderSetDetail(data, items, allJokes, editOrder);
+        if (window.lucide) {
+          lucide.createIcons();
+        }
         isEditingSetOrder = !!editOrder;
         window.isEditingSetOrder = isEditingSetOrder;
         var nameInputEl = el.querySelector("#set-detail-name-input");

@@ -343,12 +343,14 @@ html body #panel-settings .setting-controls {
 
 .settings-accent-presets {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: center;
     align-items: center;
-    gap: 10px;
+    gap: var(--spacing-sm);
     width: 100%;
-    max-width: 280px;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
 }
 
 .settings-accent-preset-btn {
@@ -388,6 +390,24 @@ html body #panel-settings .setting-controls {
     width: 100%;
     align-self: stretch;
     padding-bottom: var(--safe-bottom);
+}
+
+/* Ideas folder: fill available viewport height now that title topbar is removed */
+#app-shell #panel-ideas.panel.folder-layer:not(.hidden) {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    align-self: stretch;
+}
+
+#app-shell #panel-ideas .panel-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding-top: calc(var(--spacing-sm) + env(safe-area-inset-top, 0));
 }
 
 /* Jokes folder: fill available viewport height so list + filter slicer can use full column */
@@ -483,17 +503,27 @@ html body #panel-settings .setting-controls {
     gap: 12px;
 }
 
+/* Jokes list toolbar only (not #jokes-detail-container .joke-master-ribbon-row). */
 #panel-jokes .jokes-folder-top-row {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
+    flex-flow: row nowrap;
+    align-items: stretch;
+    gap: 6px;
     width: 100%;
+    height: 42px;
+}
+
+#panel-jokes .search-container {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: stretch;
 }
 
 #panel-jokes .jokes-folder-search {
-    flex: 1 1 160px;
+    flex: 1;
     min-width: 0;
+    width: 100%;
     box-sizing: border-box;
     padding: 10px 12px;
     border-radius: 10px;
@@ -509,11 +539,78 @@ html body #panel-settings .setting-controls {
     color: var(--text-dim);
 }
 
-#panel-jokes .jokes-folder-top-row .slab-btn {
-    flex: 0 0 auto;
-    padding-left: 14px;
-    padding-right: 14px;
+#panel-jokes .jokes-folder-top-row .btn-ribbon {
+    flex-shrink: 0;
+    min-width: 42px;
+    min-height: 42px;
+    padding: 0 8px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     white-space: nowrap;
+    border-radius: 10px;
+    border: 1px solid rgba(var(--accent-rgb), 0.4);
+    background: rgba(0, 0, 0, 0.55);
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.35), 0 0 10px rgba(var(--accent-rgb), 0.1);
+}
+
+#panel-jokes .jokes-folder-top-row .btn-ribbon:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+}
+
+#panel-jokes #btn-filter-toggle {
+    position: relative;
+    flex: 0 0 42px;
+    width: 42px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+#panel-jokes #btn-new-joke {
+    flex: 0 0 auto;
+    flex-shrink: 0;
+    min-width: 68px;
+    white-space: nowrap;
+    padding: 0 8px;
+    font-weight: bold;
+}
+
+#panel-jokes #btn-filter-toggle svg {
+    display: block;
+    flex-shrink: 0;
+}
+
+#panel-jokes .btn-ribbon-filter-count {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    box-sizing: border-box;
+    line-height: 16px;
+    font-size: 10px;
+    font-weight: 800;
+    text-align: center;
+    border-radius: 8px;
+    background: var(--accent-color);
+    color: #050505;
+    pointer-events: none;
+}
+
+#panel-jokes .btn-ribbon-filter-count:empty {
+    display: none;
 }
 
 #panel-jokes .jokes-list-sidebar-wrap {
@@ -941,7 +1038,7 @@ body #panel-ideas.modal-idea #idea-detail .modal-detail-shell {
     background: transparent;
     border: none;
     box-shadow: none;
-    padding: 20px 0 0;
+    padding: var(--spacing-sm) 0 0;
 }
 
 body #modal-container.modal-idea .idea-silo-spine,
@@ -1011,17 +1108,20 @@ body #panel-ideas.modal-idea #idea-detail #idea-focus-notes:focus {
 body #modal-container.modal-idea .idea-silo-spine .silo-footer-actions,
 body #panel-ideas.modal-idea #idea-detail .idea-silo-spine .silo-footer-actions {
     width: 100%;
-    margin-top: 20px;
+    margin-top: var(--spacing-md);
     display: flex;
-    justify-content: space-between;
+    flex-direction: row;
+    justify-content: flex-start;
     align-items: center;
-    gap: 8px;
-    padding: 0 20px;
+    gap: 4px;
+    padding: 0;
+    flex-wrap: nowrap;
 }
 
 body #modal-container.modal-idea .idea-silo-spine .silo-slab,
 body #panel-ideas.modal-idea #idea-detail .idea-silo-spine .silo-slab {
     flex: 1;
+    flex-shrink: 1;
     min-width: 0;
     padding: 8px 6px;
     box-sizing: border-box;
@@ -1034,6 +1134,20 @@ body #panel-ideas.modal-idea #idea-detail .idea-silo-spine .silo-slab {
     cursor: pointer;
     box-shadow: 4px 4px 0px #000;
     transition: all 0.05s ease;
+}
+
+body #modal-container.modal-idea .idea-silo-spine .silo-footer-actions .slab-button,
+body #panel-ideas.modal-idea #idea-detail .idea-silo-spine .silo-footer-actions .slab-button,
+body #modal-container.modal-idea .idea-silo-spine .silo-footer-actions .silo-slab,
+body #panel-ideas.modal-idea #idea-detail .idea-silo-spine .silo-footer-actions .silo-slab {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: var(--input-height, 44px);
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
 }
 
 body #modal-container.modal-idea .idea-silo-spine .silo-slab:active,
@@ -1204,9 +1318,11 @@ body #panel-ideas.modal-idea #idea-detail {
 
 .joke-master-document .joke-master-ribbon-actions {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: row;
+    flex-wrap: nowrap;
     align-items: center;
-    gap: 8px 12px;
+    gap: 4px;
+    width: 100%;
     min-width: 0;
 }
 
@@ -1256,7 +1372,8 @@ body #panel-ideas.modal-idea #idea-detail {
 }
 
 .joke-master-document .joke-master-ribbon-row #joke-admin-fields .joke-admin-field-grow {
-    flex: 1 1 160px;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .joke-master-document .joke-master-ribbon-row #joke-admin-fields .joke-admin-field-compact {
@@ -1297,40 +1414,65 @@ body #panel-ideas.modal-idea #idea-detail {
 
 /* --- Joke Detail (high-density mobile): scoped layout + readout styling --- */
 .modal-detail-joke .admin-metadata-row {
+    display: grid;
+    grid-template-columns: minmax(max-content, 110px) 5ch 7ch;
+    gap: 6px;
+    width: 100%;
+}
+
+/* Trinity row: no extra horizontal inset so ~220px budget (STGE+RK+SEC) stays visible */
+.modal-detail-joke .joke-master-ribbon-row #joke-admin-fields.joke-master-admin-below-actions {
+    padding-left: 0;
+    padding-right: 0;
+    box-sizing: border-box;
+}
+
+.modal-detail-joke .joke-master-ribbon-row #joke-admin-fields .joke-admin-fields-row {
     display: flex;
     flex-wrap: nowrap;
-    align-items: flex-end;
-    gap: var(--spacing-sm);
+    justify-content: flex-start;
+    gap: 4px;
+    align-items: center;
+}
+
+.modal-detail-joke .admin-metadata-row > .status-group,
+.modal-detail-joke .admin-metadata-row > .rank-group,
+.modal-detail-joke .admin-metadata-row > .dur-group {
+    width: auto;
+}
+
+.modal-detail-joke .joke-master-ribbon-row #joke-admin-fields .modal-form-row.full-width-row {
     width: 100%;
-    min-width: 0;
-}
-
-.modal-detail-joke .joke-master-ribbon-row #joke-admin-fields .rank-group {
-    flex: 0 0 42px;
-    max-width: 42px;
-}
-
-.modal-detail-joke .joke-master-ribbon-row #joke-admin-fields .dur-group {
-    flex: 0 0 52px;
-    max-width: 52px;
-}
-
-.modal-detail-joke .joke-master-ribbon-row #joke-admin-fields .status-group {
-    flex: 1 1 auto;
-    min-width: 0;
+    display: block;
+    margin-top: 8px;
 }
 
 .modal-detail-joke .joke-master-ribbon-actions {
     display: flex;
+    flex-direction: row;
     flex-wrap: nowrap;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
     width: 100%;
     min-width: 0;
-    gap: var(--spacing-sm);
+    gap: 4px;
+}
+
+.modal-detail-joke .joke-master-ribbon-actions .slab-button {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: var(--input-height, 44px);
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
 }
 
 .modal-detail-joke .joke-master-ribbon-actions #joke-delete-btn {
+    order: 99;
+    flex: 0 0 auto;
+    min-width: 0;
     background: rgba(255, 77, 77, 0.12);
     text-shadow: 0 0 10px rgba(255, 77, 77, 0.65);
     filter: drop-shadow(0 0 8px rgba(255, 77, 77, 0.35));
@@ -1358,6 +1500,23 @@ body #panel-ideas.modal-idea #idea-detail {
 .modal-detail-joke .dur-group .live-edit-field {
     text-align: center;
     font-family: ui-monospace, "Cascadia Code", "Consolas", "Courier New", monospace;
+}
+
+.modal-detail-joke .rank-group .live-edit-field,
+.modal-detail-joke .rank-group .workstation-select,
+.modal-detail-joke .dur-group .live-edit-field {
+    text-align: center;
+}
+
+.modal-detail-joke .admin-metadata-row input,
+.modal-detail-joke .admin-metadata-row select {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+    width: 100%;
+    text-align: center;
+    padding: 0 2px;
+    box-sizing: border-box;
 }
 
 /* --- 9. SILOED SLAB ALIGNMENT --- */
@@ -1416,36 +1575,37 @@ body #panel-ideas.modal-idea #idea-detail {
     text-overflow: ellipsis;
 }
 
-/* Set detail bottom ribbon: non-grid controls ~40px; slab grid uses .set-detail-ribbon-btn (44px). */
-.modal-detail-set .set-detail-bottom-ribbon button:not(.set-detail-ribbon-btn),
-.modal-detail-set .set-detail-bottom-ribbon .btn-stagetime:not(.set-detail-ribbon-btn) {
-    box-sizing: border-box;
-    min-height: 40px;
-    height: 40px;
-    max-height: 40px;
+/* Set detail bottom ribbon: hard-lock one 1x4 action row at touch-safe height. */
+.modal-detail-set .set-detail-bottom-ribbon .joke-master-ribbon-row {
+    display: flex;
+    flex-flow: row nowrap;
+    gap: 4px;
+    width: 100%;
+    height: 44px;
+    align-items: stretch;
+    padding: 0;
 }
 
-#app-shell .modal-detail-set .set-detail-bottom-ribbon .slab-button {
-    height: 40px !important;
-    min-height: 40px;
-    max-height: 40px;
+.modal-detail-set .set-detail-bottom-ribbon .joke-master-ribbon-actions {
+    display: contents;
 }
 
-#app-shell .modal-detail-set .set-detail-bottom-ribbon .slab-button.set-detail-ribbon-btn,
-#app-shell .modal-detail-set .set-detail-bottom-ribbon .btn-stagetime.set-detail-ribbon-btn {
-    height: 44px !important;
+.modal-detail-set .set-detail-bottom-ribbon button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-detail-set .set-detail-bottom-ribbon .set-detail-ribbon-btn {
+    flex: 1;
+    min-width: 0;
+    height: 44px;
     min-height: 44px;
     max-height: 44px;
-}
-
-.modal-detail-set .set-detail-bottom-ribbon .set-detail-edit-btn,
-.modal-detail-set .set-detail-bottom-ribbon .set-detail-save-order-btn {
-    min-width: 0;
-    justify-content: center;
-}
-
-.modal-detail-set .set-detail-bottom-ribbon .set-detail-stagetime-btn {
-    justify-content: center;
+    padding: 0;
+    margin: 0;
+    white-space: nowrap;
+    font-size: 0.85rem;
 }
 
 .modal-detail-set .set-bit-tile-list {
@@ -1799,23 +1959,23 @@ body #panel-ideas.modal-idea #idea-detail {
     padding-top: var(--spacing-md);
     padding-bottom: var(--safe-bottom);
     border-top: 1px solid var(--accent-color);
-    z-index: 9999 !important;
-    pointer-events: auto !important;
-    touch-action: none !important;
+    z-index: 9999;
+    pointer-events: auto;
+    touch-action: none;
     user-select: none;
 }
 
 .modal-detail-set .joke-master-ribbon-row {
-    position: relative !important;
-    z-index: 999 !important;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: 44px 44px;
+    position: relative;
+    z-index: 999;
+    display: flex;
+    flex-flow: row nowrap;
     align-items: center;
-    gap: 10px;
+    gap: 4px;
     width: 100%;
     box-sizing: border-box;
-    padding: 0 10px;
+    height: 44px;
+    padding: 0;
 }
 
 .modal-detail-set .joke-master-ribbon-actions {
@@ -1827,17 +1987,29 @@ body #panel-ideas.modal-idea #idea-detail {
 }
 
 .set-detail-ribbon-btn {
-    touch-action: none !important;
+    touch-action: none;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
     cursor: pointer;
+    flex: 1;
+    min-width: 0;
+    height: 44px;
+    min-height: 44px;
+    max-height: 44px;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    white-space: nowrap;
+    font-size: 0.85rem;
 }
 
 .joke-master-footer .set-detail-ribbon-btn {
     position: relative;
-    z-index: 1000 !important;
-    pointer-events: auto !important;
-    touch-action: none !important;
+    z-index: 1000;
+    pointer-events: auto;
+    touch-action: none;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
     cursor: pointer;
@@ -1852,26 +2024,6 @@ body #panel-ideas.modal-idea #idea-detail {
     display: flex;
     align-items: center;
     justify-content: center;
-}
-
-.modal-detail-set #edit-set-order-btn {
-    grid-row: 1;
-    grid-column: 1;
-}
-
-.modal-detail-set #stagetime-btn {
-    grid-row: 1;
-    grid-column: 2;
-}
-
-.modal-detail-set #set-detail-back-btn {
-    grid-row: 2;
-    grid-column: 1;
-}
-
-.modal-detail-set #set-detail-delete-btn {
-    grid-row: 2;
-    grid-column: 2;
 }
 
 .performance-mode-overlay {
@@ -1890,11 +2042,39 @@ body #panel-ideas.modal-idea #idea-detail {
 }
 
 @media (max-width: 480px) {
+    body #modal-container.modal-idea .idea-silo-spine .silo-footer-actions .slab-button,
+    body #panel-ideas.modal-idea #idea-detail .idea-silo-spine .silo-footer-actions .slab-button,
+    body #modal-container.modal-idea .idea-silo-spine .silo-footer-actions .silo-slab,
+    body #panel-ideas.modal-idea #idea-detail .idea-silo-spine .silo-footer-actions .silo-slab {
+        padding: 0 2px;
+        font-size: 0.72rem;
+    }
+
+    .modal-detail-joke .joke-master-ribbon-actions {
+        flex-wrap: nowrap;
+        gap: 4px;
+    }
+
+    .modal-detail-joke .joke-master-ribbon-actions .btn-more-options {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .modal-detail-joke .joke-master-ribbon-actions .slab-button {
+        padding: 0 2px;
+        font-size: 0.72rem;
+    }
+
+    .modal-detail-joke .joke-master-ribbon-actions #joke-delete-btn {
+        flex: 0 0 auto;
+        margin-left: auto;
+    }
+
     .joke-master-footer .set-detail-ribbon-btn {
         position: relative;
-        z-index: 1000 !important;
-        pointer-events: auto !important;
-        touch-action: none !important;
+        z-index: 1000;
+        pointer-events: auto;
+        touch-action: none;
         user-select: none;
         -webkit-tap-highlight-color: transparent;
         cursor: pointer;
