@@ -4,13 +4,18 @@
   let isEditingSetOrder = false;
   let isStagetimeMode = false;
   var emptyStageMessageTimerId = null;
+  /** Idea → joke conversion: source idea id until save or cancel (see saveJoke / closeModal / clearJokeDetailAndBack). */
+  let globalConversionId = null;
+
+  /** When true, skip tag ghost completion so Backspace/Delete are not immediately re-filled. */
+  var isDeleting = false;
 
   /** Bumped with releases; pair with index.html ASSET_VERSION + sw.js for cache/SW refresh. */
-  window.STAGETIME_APP_VERSION = "0.3.7";
+  window.STAGETIME_APP_VERSION = "22";
   window.currentJokeId = null;
   window.currentSetId = null;
-  // Cache-buster asset version: must match index.html ASSET_VERSION and ?v=... querystrings (Asset v127 / app 0.3.7).
-  var VERSION = typeof ASSET_VERSION !== "undefined" ? String(ASSET_VERSION) : "127";
+  // Cache-buster asset version: must match index.html ASSET_VERSION and ?v=... querystrings (Asset v22 / app 22).
+  var VERSION = typeof ASSET_VERSION !== "undefined" ? String(ASSET_VERSION) : "22";
   window.VERSION = VERSION;
   (function syncVersionFooter() {
     var el = document.getElementById("version-display");
@@ -24,7 +29,6 @@
   let _filters = { status: "all", rating: "all", search: "", topic: "all" };
   var _hubSearchDebounceTimer = null;
   var _jokesSearchDebounceTimer = null;
-  let _pendingSourceIdeaId = null;
 
   function normalizeMirrorRecord(row, typeHint) {
     if (!row || typeof row !== "object") return null;
@@ -99,26 +103,116 @@
     });
   }
 
-  function updateGlobalTagDatalistFromCache() {
-    var tagDl = document.getElementById("tag-datalist");
-    if (!tagDl) return;
-    var set = {};
-    (Array.isArray(_cache) ? _cache : []).forEach(function (item) {
-      var tags = item && item.tags;
-      if (!Array.isArray(tags)) return;
-      tags.forEach(function (t) {
-        var s = t != null ? String(t).trim() : "";
-        if (s) set[s.toLowerCase()] = s;
-      });
+  function getMirrorStateForJokeTags() {
+    var list = Array.isArray(_cache) ? _cache : [];
+    return {
+      jokes: list.filter(function (item) {
+        return item && item.type === "joke";
+      }),
+      ideas: list.filter(function (item) {
+        return item && item.type === "idea";
+      })
+    };
+  }
+
+  function findFirstTagStartingWithGhost(q, state) {
+    var ql = q != null ? String(q).toLowerCase() : "";
+    if (ql === "") return null;
+    var jokes = state.jokes || [];
+    var ideas = state.ideas || [];
+    function scan(items) {
+      for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        if (!item || !Array.isArray(item.tags)) continue;
+        for (var j = 0; j < item.tags.length; j++) {
+          var val = item.tags[j];
+          var s = val != null ? String(val) : "";
+          var st = s.trim();
+          if (!st) continue;
+          var sl = st.toLowerCase();
+          if (sl.indexOf(ql) !== 0) continue;
+          if (st.length <= ql.length) continue;
+          return st;
+        }
+      }
+      return null;
+    }
+    var m = scan(jokes);
+    if (m) return m;
+    return scan(ideas);
+  }
+
+  function applyJokeTagsGhostPrediction(input) {
+    if (!input) return;
+    if (isDeleting) return;
+    var inputId = input.id != null ? String(input.id) : "";
+    if (inputId !== "joke-tags-input" && inputId !== "idea-tags-input") return;
+    var v = input.value != null ? String(input.value) : "";
+    var selS = input.selectionStart != null ? input.selectionStart : v.length;
+    var selE = input.selectionEnd != null ? input.selectionEnd : v.length;
+    var lastComma = v.lastIndexOf(",");
+    var segStart = lastComma >= 0 ? lastComma + 1 : 0;
+    var before = v.slice(0, segStart);
+    var rawSeg = v.slice(segStart);
+    var anchorInSeg = Math.min(selS, selE) - segStart;
+    if (anchorInSeg < 0) anchorInSeg = 0;
+    if (anchorInSeg > rawSeg.length) anchorInSeg = rawSeg.length;
+    var userPrefixRaw = rawSeg.slice(0, anchorInSeg);
+    var q = userPrefixRaw.trim().toLowerCase();
+    if (q === "") return;
+    var state = getMirrorStateForJokeTags();
+    var match = findFirstTagStartingWithGhost(q, state);
+    if (!match) return;
+    var ql = q;
+    var ml = match.toLowerCase();
+    if (ml.indexOf(ql) !== 0) return;
+    var rem = match.slice(ql.length);
+    if (rem === "") return;
+    var newVal = before + userPrefixRaw + rem;
+    if (newVal === v && selE > selS) return;
+    input.value = newVal;
+    var absStart = before.length + userPrefixRaw.length;
+    var absEnd = absStart + rem.length;
+    requestAnimationFrame(function () {
+      try {
+        input.setSelectionRange(absStart, absEnd);
+      } catch (err) {}
     });
-    tagDl.innerHTML = "";
-    Object.keys(set)
-      .sort()
-      .forEach(function (key) {
-        var opt = document.createElement("option");
-        opt.value = set[key];
-        tagDl.appendChild(opt);
-      });
+  }
+
+  function initTagsGhostPredictionFlow() {
+    if (document.documentElement && document.documentElement.dataset.tagsGhostPredictionBound === "1") return;
+    if (document.documentElement) document.documentElement.dataset.tagsGhostPredictionBound = "1";
+    document.addEventListener(
+      "keydown",
+      function (e) {
+        var k = e.key != null ? String(e.key) : "";
+        isDeleting = k === "Backspace" || k === "Delete";
+      },
+      false
+    );
+    document.addEventListener(
+      "beforeinput",
+      function (e) {
+        var it = e.inputType != null ? String(e.inputType) : "";
+        if (it.indexOf("deleteContentBackward") >= 0 || it.indexOf("deleteContentForward") >= 0) {
+          isDeleting = true;
+        }
+      },
+      false
+    );
+    document.addEventListener(
+      "input",
+      function (e) {
+        var t = e.target;
+        if (!t) return;
+        var targetId = t.id != null ? String(t.id) : "";
+        if (targetId !== "joke-tags-input" && targetId !== "idea-tags-input") return;
+        applyJokeTagsGhostPrediction(t);
+        isDeleting = false;
+      },
+      false
+    );
   }
 
   function countActiveSlicerFilters() {
@@ -254,11 +348,10 @@
     if (!dataLayer) {
       _cache = [];
       jokesListCache = [];
-    updateGlobalTagDatalistFromCache();
-    renderSlicer();
-    updateJokesFiltersButtonLabel();
-    updateDashboardStats();
-    return;
+      renderSlicer();
+      updateJokesFiltersButtonLabel();
+      updateDashboardStats();
+      return;
     }
     var jokes = [];
     var ideas = [];
@@ -289,7 +382,6 @@
     jokesListCache = _cache.filter(function (x) {
       return x && x.type === "joke";
     });
-    updateGlobalTagDatalistFromCache();
     renderSlicer();
     updateJokesFiltersButtonLabel();
     updateDashboardStats();
@@ -437,70 +529,27 @@
   async function convertToJoke(ideaId) {
     var iid = parseInt(String(ideaId).trim(), 10);
     if (!Number.isFinite(iid) || iid < 1) throw new Error("Invalid idea id");
-    if (!dataLayer || typeof dataLayer.getIdea !== "function") {
-      throw new Error("Convert not available");
+    var idea =
+      Array.isArray(_cache) ? _cache.find(function (x) { return x && x.type === "idea" && Number(x.id) === iid; }) : null;
+    if (!idea && dataLayer && typeof dataLayer.getIdea === "function") {
+      idea = await dataLayer.getIdea(iid);
     }
-    var idea = await dataLayer.getIdea(iid);
     if (!idea) throw new Error("Idea not found");
-    _pendingSourceIdeaId = iid;
+    globalConversionId = iid;
     closeIdeaDetailModal();
     showPanel("jokes", false);
     setJokesFilterSidebarOpen(false);
-    var mc = document.getElementById("modal-container");
-    if (mc) mc.classList.add("is-detail-view");
-    var el = getJokeDetailEl();
-    if (!el) {
-      _pendingSourceIdeaId = null;
-      throw new Error("Joke detail container missing");
-    }
-    setJokesDetailVisibility(true);
-    el.dataset.jokeId = "";
-    window.currentJokeId = null;
-    var mappedTitle = idea.title != null ? String(idea.title).trim() : "";
-    var mappedBody = idea.content != null ? String(idea.content) : "";
-    var ideaTopicRaw = idea.topic != null ? String(idea.topic).trim() : "";
-    var mappedTopic = ideaTopicRaw !== "" ? ideaTopicRaw : "Uncategorized";
-    var mappedTags = Array.isArray(idea.tags) ? idea.tags.slice() : [];
-    var mappedNotes = idea.notes != null ? String(idea.notes) : "";
-    renderUniversalDetail(
-      "joke",
-      {
-        title: mappedTitle,
-        content: mappedBody,
-        act_out: "",
-        premise: mappedBody,
-        punchline: "",
-        status: "draft",
-        rating: "",
-        setup_notes: mappedNotes,
-        tags: mappedTags,
-        duration: null
-      },
-      { el: el, hideDelete: true }
-    );
-    var titleRich = document.getElementById("joke-detail-title-display");
-    var titleInput = getJokeEditTitleEl();
-    if (titleRich) {
-      titleRich.classList.remove("hidden");
-      titleRich.innerHTML = "<span style=\"color: var(--neon-green)\">CONVERTING IDEA</span>";
-    }
-    if (titleInput) {
-      titleInput.value = mappedTitle;
-      titleInput.classList.add("hidden");
-    }
-    toggleJokeAdmin(false);
-    var topicEl = document.getElementById("joke-edit-topic");
-    fillTopicSelect(topicEl, mappedTopic).then(function () {
-      if (topicEl) topicEl.value = mappedTopic;
-    });
-    var setTrig = el.querySelector(".btn-set-trigger");
-    if (setTrig) {
-      setTrig.disabled = true;
-      setTrig.setAttribute("aria-disabled", "true");
-      setTrig.title = "Save the joke first to add to a set";
-    }
-    bindJokeDetailActions(el, mc, { skipBodyFocus: true });
-    await refreshCache();
+    window.setTimeout(function () {
+      var clean = {
+        title: idea.title || "",
+        content: idea.content || "",
+        topic: idea.topic || "",
+        tags: Array.isArray(idea.tags) ? idea.tags.slice() : [],
+        notes: idea.notes || ""
+      };
+      openNewJokeDetail(clean);
+    }, 150);
+    refreshCache().catch(function () {});
   }
 
   function showToast(message, backgroundColor) {
@@ -847,6 +896,15 @@
     });
   }
 
+  /** Folder transition: showPanel + active layer. Pass isNavClick false to avoid sweep when staying on in-panel detail (e.g. after idea→joke save). */
+  function mapsTo(tabId, isNavClick) {
+    var id = tabId != null ? String(tabId).trim() : "";
+    if (!id) return;
+    if (isNavClick === undefined) isNavClick = true;
+    showPanel(id, isNavClick);
+    syncFolderLayerActiveForTab(id);
+  }
+
   function openModal(tabId) {
     var modalContainer = document.getElementById("modal-container");
     var targetPanel = tabId === "jokes" ? getJokesPanelEl() : document.getElementById("panel-" + tabId);
@@ -857,8 +915,7 @@
       modalContainer.classList.add("hidden");
       modalContainer.classList.remove("is-detail-view");
       modalContainer.classList.remove("modal-joke", "modal-idea");
-      var udcOpen = document.getElementById("universal-detail-content");
-      if (udcOpen) udcOpen.innerHTML = "";
+      modalContainer.innerHTML = "";
     }
     showPanel(tabId, false);
     targetPanel = tabId === "jokes" ? getJokesPanelEl() : document.getElementById("panel-" + tabId);
@@ -905,8 +962,7 @@
       modalContainer.classList.add("hidden");
       modalContainer.classList.remove("modal-joke", "modal-idea", "is-detail-view");
       modalContainer.setAttribute("aria-hidden", "true");
-      var udc = document.getElementById("universal-detail-content");
-      if (udc) udc.innerHTML = "";
+      modalContainer.innerHTML = "";
     }
     var panelIdeas = document.getElementById("panel-ideas");
     if (panelIdeas) {
@@ -954,7 +1010,8 @@
   }
 
   function closeModal(sweepOnly) {
-    _pendingSourceIdeaId = null;
+    globalConversionId = null;
+    if (document.body) document.body.classList.remove("modal-open");
     var jokeTitleDisplay = document.getElementById("joke-detail-title-display");
     if (jokeTitleDisplay) {
       jokeTitleDisplay.classList.add("hidden");
@@ -976,9 +1033,8 @@
       modalContainer.classList.remove("is-detail-view", "modal-joke", "modal-idea");
       modalContainer.setAttribute("aria-hidden", "true");
       modalContainer.style.display = "";
+      modalContainer.innerHTML = "";
     }
-    var udc = document.getElementById("universal-detail-content");
-    if (udc) udc.innerHTML = "";
     var panelIdeas = document.getElementById("panel-ideas");
     if (panelIdeas) {
       panelIdeas.classList.remove("is-viewing-detail", "is-detail-view", "modal-idea");
@@ -1523,7 +1579,8 @@
       "</li>";
   }
 
-  function renderJokeList(optionalSelectJokeId) {
+  function renderJokeList(optionalSelectJokeId, listOpts) {
+    listOpts = listOpts || {};
     jokesModalFilterState.topic = _filters.topic != null ? _filters.topic : "all";
     jokesModalFilterState.status = _filters.status != null ? _filters.status : "all";
     jokesModalFilterState.rating = _filters.rating != null ? _filters.rating : "all";
@@ -1552,7 +1609,12 @@
       var jokeSelId = optionalSelectJokeId != null ? String(optionalSelectJokeId) : "";
       var activeCard = el.querySelector(".joke-item[data-id=\"" + jokeSelId + "\"]");
       if (activeCard) activeCard.classList.add("active");
-      showJokeDetail(optionalSelectJokeId);
+      if (listOpts.skipOpenDetail) {
+        setJokesDetailVisibility(false);
+        window.currentJokeId = optionalSelectJokeId != null ? Number(optionalSelectJokeId) : null;
+      } else {
+        showJokeDetail(optionalSelectJokeId);
+      }
     } else {
       setJokesDetailVisibility(false);
     }
@@ -1573,10 +1635,10 @@
     });
   }
 
-  function fetchJokesForModal(optionalSelectJokeId) {
+  function fetchJokesForModal(optionalSelectJokeId, listOpts) {
     function afterCacheFill() {
       jokesListCache = Array.isArray(_cache) ? _cache.filter(function (x) { return x && x.type === "joke"; }) : [];
-      renderJokeList(optionalSelectJokeId);
+      renderJokeList(optionalSelectJokeId, listOpts);
       return Promise.resolve();
     }
     return refreshCache()
@@ -1592,8 +1654,8 @@
       });
   }
 
-  function loadJokes(optionalSelectJokeId) {
-    fetchJokesForModal(optionalSelectJokeId);
+  function loadJokes(optionalSelectJokeId, listOpts) {
+    fetchJokesForModal(optionalSelectJokeId, listOpts);
     schedulePanelFocus("jokes-search");
   }
 
@@ -1636,7 +1698,7 @@
   window.focusJokeBodyIfEmpty = focusJokeBodyIfEmpty;
 
   function saveJoke(el, saveBtn) {
-    var tagsInput = document.getElementById("joke-edit-tags");
+    var tagsInput = document.getElementById("joke-tags-input");
     var tagsVal = tagsInput ? tagsInput.value.trim() : "";
     var durationInput = document.getElementById("joke-edit-duration");
     var durationVal = durationInput && durationInput.value.trim() !== "" ? parseInt(durationInput.value.trim(), 10) : null;
@@ -1694,7 +1756,7 @@
         rating: payload.rating
       })
         .then(function (created) {
-          var pendingSrc = _pendingSourceIdeaId;
+          var pendingSrc = globalConversionId;
           function finishNewJokeSaveUi() {
             var titleRich = document.getElementById("joke-detail-title-display");
             if (titleRich) {
@@ -1704,7 +1766,7 @@
             var titleInp = getJokeEditTitleEl();
             if (titleInp) {
               titleInp.classList.remove("hidden");
-              var newTitle = created && created.title != null ? String(created.title) : (payload.title || "");
+              var newTitle = created && created.title != null ? String(created.title) : (payload.title != null ? String(payload.title) : "");
               titleInp.value = newTitle;
             }
             if (created && created.id != null) {
@@ -1727,28 +1789,18 @@
             }, 1500);
           }
           if (pendingSrc != null) {
-            var delP = dataLayer && typeof dataLayer.deleteIdea === "function"
-              ? dataLayer.deleteIdea(pendingSrc)
-              : apiFetch("/ideas/" + pendingSrc, { method: "DELETE" }).then(function (r) {
-                  if (!r.ok) throw new Error("Delete failed");
-                });
-            delP
-              .then(function () {
-                _pendingSourceIdeaId = null;
-                return refreshCache();
-              })
-              .then(function () {
-                var ideaSearch = document.getElementById("idea-search-input");
-                renderIdeas(ideaSearch ? ideaSearch.value : "");
-                updateDashboardStats();
-                finishNewJokeSaveUi();
-              })
-              .catch(function () {
-                _pendingSourceIdeaId = null;
-                finishNewJokeSaveUi();
-              });
+            var createdId = created && created.id != null ? created.id : null;
+            globalConversionId = null;
+            closeModal(true);
+            mapsTo("jokes", false);
+            window.currentJokeId = createdId;
+            loadJokes(createdId != null ? createdId : undefined, { skipOpenDetail: true });
+            deleteIdeaRequest(pendingSrc).then(function () {
+              var ideaSearch = document.getElementById("idea-search-input");
+              renderIdeas(ideaSearch ? ideaSearch.value : "");
+              updateDashboardStats();
+            });
           } else {
-            _pendingSourceIdeaId = null;
             finishNewJokeSaveUi();
           }
         })
@@ -1823,10 +1875,7 @@
         return;
       }
       if (type === "idea") {
-        var udc = document.getElementById("universal-detail-content");
-        if (udc && modalContainer.contains(udc)) {
-          modalContainer.classList.add("modal-idea");
-        }
+        modalContainer.classList.add("modal-idea");
         return;
       }
       if (!item || typeof item !== "object") return;
@@ -1853,15 +1902,15 @@
     var el = opts.el;
     if (!el) {
       if (type === "joke") el = getJokeDetailEl();
-      else if (type === "idea") el = getIdeaDetailEl();
-      else el = getIdeaDetailEl();
+      else if (type === "idea") el = document.getElementById("modal-container");
+      else el = document.getElementById("modal-container");
     }
     if (!el) return;
 
     if (type === "joke") {
       var hideDelete = !!opts.hideDelete;
       el.innerHTML =
-        "<div class=\"modal-detail-shell modal-detail-joke joke-master-document detail-layout focus-slab focus-slab-joke\">" +
+        "<div class=\"modal-detail-shell modal-detail-joke joke-master-document detail-layout focus-slab focus-slab-joke joke-silo-spine\">" +
         "<div class=\"joke-detail-edit-form\">" +
         "<div class=\"modal-detail-scroll-content joke-master-body\">" +
         "<div class=\"modal-form-row joke-master-field\"><p class=\"detail-label\">BODY</p>" +
@@ -1904,7 +1953,7 @@
         "</div>" +
         "<div class=\"joke-admin-fields-row\">" +
         "<div class=\"modal-form-row full-width-row\"><p class=\"detail-label\">Tags</p>" +
-        "<input type=\"text\" id=\"joke-edit-tags\" class=\"live-edit-field joke-master-tags\" list=\"tag-datalist\" value=\"\"></div>" +
+        "<input type=\"text\" id=\"joke-tags-input\" class=\"live-edit-field joke-master-tags workstation-select\" value=\"\" autocomplete=\"off\" aria-label=\"Joke tags\"></div>" +
         "</div>" +
         "<div class=\"modal-form-row\"><p class=\"detail-label\">Notes</p><textarea id=\"joke-edit-setup_notes\" class=\"live-edit-field\" rows=\"2\"></textarea></div>" +
         "</div>" +
@@ -1937,64 +1986,69 @@
       if (dur) dur.value = j.duration != null && j.duration !== "" && !isNaN(Number(j.duration)) ? String(j.duration) : "";
       var rt = document.getElementById("joke-edit-rating");
       if (rt) rt.value = j.rating != null ? String(j.rating) : "";
-      var tagsIn = document.getElementById("joke-edit-tags");
+      var tagsIn = document.getElementById("joke-tags-input");
       if (tagsIn) tagsIn.value = Array.isArray(j.tags) ? j.tags.map(function (t) { return t != null ? String(t) : ""; }).filter(function (s) { return s !== ""; }).join(", ") : "";
       var notes = document.getElementById("joke-edit-setup_notes");
       if (notes) notes.value = j.setup_notes != null ? String(j.setup_notes) : "";
     } else if (type === "idea") {
       var item = data;
-      var ideaId = item.id != null ? Number(item.id) : null;
-      var contentPane = el || getIdeaDetailEl();
+      var val = item.id;
+      var ideaId = val != null ? Number(item.id) : null;
+      var contentPane = el;
       if (!contentPane) return;
       var modalContainer = document.getElementById("modal-container");
       var ideasPanelEl = document.getElementById("panel-ideas");
       contentPane._currentIdea = item;
       if (ideasPanelEl) ideasPanelEl._currentIdea = item;
       if (modalContainer) modalContainer._currentIdea = item;
-      var udcLegacy = document.getElementById("universal-detail-content");
-      if (modalContainer && udcLegacy && modalContainer.contains(udcLegacy)) {
+      if (modalContainer && contentPane === modalContainer) {
         modalContainer.style.display = "flex";
         modalContainer.classList.add("is-detail-view");
         modalContainer.classList.remove("hidden");
         modalContainer.setAttribute("aria-hidden", "false");
       }
-      var ideaTitleStr = item.title != null ? String(item.title) : "";
+      val = item.title;
+      var ideaTitleStr = val != null ? String(val) : "";
       var ideaTitleHeading = ideaTitleStr.trim() !== "" ? ideaTitleStr : "Untitled Idea";
-      var ideaBodyStr =
-        item.content != null ? String(item.content) : (item.premise != null ? String(item.premise) : "");
-      var ideaNotesStr =
-        item.notes != null ? String(item.notes) : (item.setup_notes != null ? String(item.setup_notes) : "");
+      val = item.content;
+      var ideaBodyStr = val != null ? String(val) : "";
+      val = item.premise;
+      var ideaPremiseStr = val != null ? String(val) : "";
+      val = ideaBodyStr;
+      ideaBodyStr = val != null && String(val) !== "" ? String(val) : ideaPremiseStr;
+      val = item.notes;
+      var ideaNotesStr = val != null ? String(val) : "";
+      val = item.setup_notes;
+      var ideaSetupNotesStr = val != null ? String(val) : "";
+      val = ideaNotesStr;
+      ideaNotesStr = val != null && String(val) !== "" ? String(val) : ideaSetupNotesStr;
+      var ideaIdJs = ideaId != null && !isNaN(ideaId) ? String(ideaId) : "null";
       contentPane.innerHTML =
-        `<div class="modal-detail-shell">` +
-        `<div class="branded-modal-content idea-silo-spine">` +
+        `<div class="idea-silo-spine">` +
         `<div class="idea-detail-header-row">` +
         `<h2 class="joke-detail-title" id="modal-idea-title">${escapeHtml(ideaTitleHeading)}</h2>` +
         `</div>` +
         `<div class="modal-form-row"><p class="detail-label">Content</p><textarea id="idea-focus-content" class="live-edit-field" rows="7">${escapeHtml(ideaBodyStr)}</textarea></div>` +
         `<div class="modal-form-row"><p class="detail-label">Notes</p><textarea id="idea-focus-notes" class="live-edit-field" rows="4">${escapeHtml(ideaNotesStr)}</textarea></div>` +
         `<div class="modal-form-row"><p class="detail-label">Topic</p><select id="idea-edit-topic" class="workstation-select topic-select-global" aria-label="Idea topic"></select></div>` +
-        `<div class="modal-form-row"><p class="detail-label">Tags</p><input type="text" id="idea-edit-tags" class="live-edit-field" list="tag-datalist" placeholder="Comma-separated tags" value="" autocomplete="off" aria-label="Idea tags"></div>` +
+        `<div class="modal-form-row"><p class="detail-label">Tags</p><input type="text" id="idea-tags-input" class="live-edit-field workstation-select" placeholder="Comma-separated tags" value="" autocomplete="off" aria-label="Idea tags"></div>` +
         `<div class="silo-footer-actions">` +
-        `<button type="button" class="silo-slab detail-modal-close-btn" onclick="window.closeModal(event)" aria-label="Close">×</button>` +
-        `<button type="button" class="silo-slab" onclick="window.openSetPicker(${ideaId != null && !isNaN(ideaId) ? String(ideaId) : "null"}, 'idea')">+SET</button>` +
-        `<button type="button" class="silo-slab" onclick="window.saveIdea(${ideaId != null && !isNaN(ideaId) ? String(ideaId) : "null"})">Save</button>` +
+        `<button type="button" class="silo-slab slab-button detail-modal-close-btn" onclick="window.closeModal(event)" aria-label="Back">BACK</button>` +
+        `<button type="button" class="silo-slab" onclick="window.openSetPicker(${ideaIdJs}, 'idea')">+SET</button>` +
+        `<button type="button" class="silo-slab" onclick="window.saveIdea(${ideaIdJs})">Save</button>` +
         `<button type="button" class="silo-slab silo-btn-danger" onclick="window.deleteCurrentItem()">DEL</button>` +
         `</div>` +
         `<button type="button" id="idea-detail-btn-convert" class="convert-joke-trigger silo-slab">CONVERT TO JOKE</button>` +
-        `</div>` +
         `</div>`;
       el = contentPane;
       var topicSel = document.getElementById("idea-edit-topic");
-      var tagsInp = document.getElementById("idea-edit-tags");
-      var topicVal =
-        item.topic != null && String(item.topic).trim() !== ""
-          ? String(item.topic).trim()
-          : "Uncategorized";
+      var tagsInp = document.getElementById("idea-tags-input");
       if (tagsInp) {
         tagsInp.value = Array.isArray(item.tags)
           ? item.tags
               .map(function (t) {
-                return t != null ? String(t) : "";
+                val = t;
+                return val != null ? String(val) : "";
               })
               .filter(function (s) {
                 return s !== "";
@@ -2002,6 +2056,9 @@
               .join(", ")
           : "";
       }
+      val = item.topic;
+      var topicRaw = val != null ? String(val).trim() : "";
+      var topicVal = topicRaw !== "" ? topicRaw : "Uncategorized";
       if (topicSel) {
         fillTopicSelect(topicSel, topicVal).then(function () {
           if (topicSel) topicSel.value = topicVal;
@@ -2014,7 +2071,7 @@
   }
 
   function clearJokeDetailAndBack(el, mc) {
-    _pendingSourceIdeaId = null;
+    globalConversionId = null;
     el.classList.add("hidden");
     el.innerHTML = "";
     window.currentJokeId = null;
@@ -2071,12 +2128,22 @@
       });
   }
 
-  function openNewJokeDetail() {
+  function openNewJokeDetail(prefill) {
+    prefill = prefill && typeof prefill === "object" ? prefill : null;
+    var titleStr = prefill && prefill.title != null ? String(prefill.title) : "";
+    var contentStr = prefill && prefill.content != null ? String(prefill.content) : "";
+    var topicStr = prefill && prefill.topic != null ? String(prefill.topic) : "";
+    var tagsArr = prefill && Array.isArray(prefill.tags) ? prefill.tags.slice() : [];
+    var notesStr = prefill && prefill.notes != null ? String(prefill.notes) : "";
+
     setJokesFilterSidebarOpen(false);
     var mc = document.getElementById("modal-container");
     if (mc) mc.classList.add("is-detail-view");
     var el = getJokeDetailEl();
-    if (!el) return;
+    if (!el) {
+      if (globalConversionId != null) globalConversionId = null;
+      return;
+    }
     setJokesDetailVisibility(true);
     el.dataset.jokeId = "";
     window.currentJokeId = null;
@@ -2084,27 +2151,45 @@
     renderUniversalDetail(
       "joke",
       {
-        title: "",
-        content: "",
+        title: titleStr,
+        content: contentStr,
         act_out: "",
-        premise: "",
+        premise: contentStr,
         punchline: "",
         status: "draft",
         rating: "",
-        setup_notes: "",
-        tags: [],
+        setup_notes: notesStr,
+        tags: tagsArr,
         duration: null
       },
       { el: el, hideDelete: true }
     );
 
+    var titleRich = document.getElementById("joke-detail-title-display");
     var titleInput = getJokeEditTitleEl();
-    if (titleInput) titleInput.value = "";
+    if (globalConversionId != null) {
+      if (titleRich) {
+        titleRich.classList.remove("hidden");
+        titleRich.innerHTML = "<span style=\"color: var(--neon-green)\">CONVERTING IDEA</span>";
+      }
+      if (titleInput) {
+        titleInput.value = titleStr;
+        titleInput.classList.add("hidden");
+      }
+    } else {
+      if (titleRich) {
+        titleRich.classList.add("hidden");
+        titleRich.innerHTML = "";
+      }
+      if (titleInput) {
+        titleInput.classList.remove("hidden");
+        titleInput.value = titleStr;
+      }
+    }
     toggleJokeAdmin(false);
     var topicEl = document.getElementById("joke-edit-topic");
-    var topicSnap = "";
-    fillTopicSelect(topicEl, topicSnap).then(function () {
-      if (topicEl) topicEl.value = topicSnap;
+    fillTopicSelect(topicEl, topicStr).then(function () {
+      if (topicEl) topicEl.value = topicStr;
     });
 
     var setTrig = el.querySelector(".btn-set-trigger");
@@ -2116,12 +2201,14 @@
 
     bindJokeDetailActions(el, mc, { skipBodyFocus: true });
 
-    requestAnimationFrame(function () {
+    if (globalConversionId == null) {
       requestAnimationFrame(function () {
-        var ti = getJokeEditTitleEl();
-        if (ti) ti.focus();
+        requestAnimationFrame(function () {
+          var ti = getJokeEditTitleEl();
+          if (ti) ti.focus();
+        });
       });
-    });
+    }
   }
 
   function renderSetsList(sets, optionalSelectSetId) {
@@ -2220,11 +2307,11 @@
   function returnToIdeaList() {
     var container = document.getElementById("modal-container");
     if (container) {
-      container.classList.remove("is-detail-view");
+      container.classList.remove("is-detail-view", "modal-idea", "modal-joke");
       container.classList.add("hidden");
       container.setAttribute("aria-hidden", "true");
-      var udcBack = document.getElementById("universal-detail-content");
-      if (udcBack) udcBack.innerHTML = "";
+      container.style.display = "";
+      container.innerHTML = "";
     }
     document.getElementById("panel-ideas-list")?.classList.remove("hidden");
     var panel = document.getElementById("panel-ideas");
@@ -2244,6 +2331,7 @@
     }
     if (listEl) listEl.classList.remove("hidden");
     if (toolbarEl) toolbarEl.classList.remove("hidden");
+    if (document.body) document.body.classList.remove("modal-open");
   }
 
   function showIdeaDetail(idea) {
@@ -2309,14 +2397,8 @@
       return;
     }
     document.getElementById("panel-ideas-list")?.classList.add("hidden");
-    var ideaDetailOpen = getIdeaDetailEl();
-    if (ideaDetailOpen) {
-      ideaDetailOpen.classList.remove("hidden");
-      ideaDetailOpen.style.display = "flex";
-    }
     var mc = document.getElementById("modal-container");
-    var udcMc = document.getElementById("universal-detail-content");
-    if (mc && udcMc && mc.contains(udcMc)) {
+    if (mc) {
       mc.classList.add("is-detail-view");
       mc.classList.remove("hidden");
       mc.setAttribute("aria-hidden", "false");
@@ -2327,6 +2409,7 @@
       panel.classList.add("is-detail-view");
       panel.classList.add("is-viewing-detail");
     }
+    if (document.body) document.body.classList.add("modal-open");
     var ideaPanelTitleRaw = ideaRef.title != null ? String(ideaRef.title) : "";
     setIdeasPanelTitle(ideaPanelTitleRaw.trim() !== "" ? ideaPanelTitleRaw : "Untitled Idea");
     renderUniversalDetail("idea", ideaRef);
@@ -2335,11 +2418,11 @@
   function closeIdeaDetailModal() {
     var ide = document.getElementById("modal-container");
     if (ide) {
-      var udcClose = document.getElementById("universal-detail-content");
-      if (udcClose) udcClose.innerHTML = "";
+      ide.innerHTML = "";
       ide.classList.add("hidden");
-      ide.classList.remove("modal-joke", "modal-idea");
+      ide.classList.remove("modal-joke", "modal-idea", "is-detail-view");
       ide.setAttribute("aria-hidden", "true");
+      ide.style.display = "";
     }
 
     var panel = document.getElementById("panel-ideas");
@@ -2357,13 +2440,11 @@
       ideaDetCloseIdea.style.display = "";
     }
     setIdeasPanelTitle("IDEAS");
-    var mc = document.getElementById("modal-container");
-    if (mc) mc.classList.remove("is-detail-view");
-    if (mc) mc.classList.remove("modal-joke", "modal-idea");
+    if (document.body) document.body.classList.remove("modal-open");
   }
 
   function deleteIdeaRequest(ideaId) {
-    (dataLayer ? dataLayer.deleteIdea(ideaId) : apiFetch("/ideas/" + ideaId, { method: "DELETE" }))
+    return (dataLayer ? dataLayer.deleteIdea(ideaId) : apiFetch("/ideas/" + ideaId, { method: "DELETE" }))
       .then(function (r) {
         if (r && r.ok === false) throw new Error("Delete failed");
         return refreshCache();
@@ -2616,55 +2697,103 @@
       }
       var jokesInSet = items.filter(function (i) {
         if (!i) return false;
-        var typ = i.type != null ? String(i.type) : "joke";
+        var typRaw = i.type;
+        var typ = typRaw != null ? String(typRaw) : "joke";
         return typ === "joke";
       });
       if (jokesInSet.length === 0) {
         showToast("Add some jokes before entering StageTime mode! 🎤");
         return;
       }
-      var setNameVal = activeSetDetailName;
-      var setName = setNameVal != null ? String(setNameVal) : "";
+      var val = activeSetDetailName;
+      var setName = val != null ? String(val) : "";
       var startMs = Date.now();
       var overlay = document.createElement("div");
       overlay.className = "performance-mode-overlay";
       overlay.setAttribute("aria-hidden", "false");
-      var listHtml = "<ul class=\"performance-mode-list\">";
-      items.forEach(function (j) {
-        j = j || {};
-        var val = formatSetDetailItemTitle(j);
-        var title = val != null ? String(val) : "";
-        var typeVal = j.type;
-        var itemType = typeVal != null ? String(typeVal) : "";
-        var ideaClass = itemType === "idea" ? " idea-item" : "";
-        listHtml += "<li class=\"" + ideaClass + "\">" + escapeHtml(title) + "</li>";
-      });
-      listHtml += "</ul>";
+      var currentIdx = 0;
+      function jokeTitleAt(i) {
+        var j = jokesInSet[i];
+        if (!j) return "";
+        var raw = formatSetDetailItemTitle(j);
+        val = raw;
+        return val != null ? String(val) : "";
+      }
+      var initialTitle = jokeTitleAt(0);
       overlay.innerHTML =
+        "<div class=\"performance-mode-stage\">" +
         "<div class=\"performance-mode-stopwatch\" id=\"performance-mode-stopwatch\">0:00</div>" +
-        "<h2 class=\"performance-mode-title\">" + escapeHtml(setName) + "</h2>" +
-        listHtml +
-        "<p class=\"performance-mode-exit\">Tap below to exit</p>";
+        "<p class=\"performance-mode-set-meta\">" + escapeHtml(setName) + "</p>" +
+        "<h2 class=\"performance-mode-current-title\" id=\"performance-mode-current-title\">" + escapeHtml(initialTitle) + "</h2>" +
+        "</div>" +
+        "<p class=\"performance-mode-exit\" role=\"button\" tabindex=\"0\">Tap to exit</p>" +
+        "<footer class=\"performance-mode-controls\" aria-label=\"Stage controls\">" +
+        "<button type=\"button\" id=\"performance-mode-pause\" class=\"slab-button performance-mode-slab\">Pause</button>" +
+        "<button type=\"button\" id=\"performance-mode-next\" class=\"slab-button performance-mode-slab\">Next</button>" +
+        "</footer>";
       document.body.classList.toggle("stage-lock-active", true);
       isStagetimeMode = true;
       document.body.appendChild(overlay);
       var stopwatchEl = document.getElementById("performance-mode-stopwatch");
+      var titleEl = document.getElementById("performance-mode-current-title");
+      var pauseBtn = document.getElementById("performance-mode-pause");
+      var nextBtn = document.getElementById("performance-mode-next");
+      var paused = false;
+      var pauseStartedAt = 0;
+      var totalPaused = 0;
       function formatElapsed(ms) {
         var totalSec = Math.floor(ms / 1000);
         var m = Math.floor(totalSec / 60);
         var s = totalSec % 60;
         return m + ":" + (s < 10 ? "0" : "") + s;
       }
+      function liveElapsedMs() {
+        var now = Date.now();
+        var pauseHold = paused && pauseStartedAt ? now - pauseStartedAt : 0;
+        return now - startMs - totalPaused - pauseHold;
+      }
       function tick() {
-        if (stopwatchEl) stopwatchEl.textContent = formatElapsed(Date.now() - startMs);
+        if (!stopwatchEl || paused) return;
+        stopwatchEl.textContent = formatElapsed(liveElapsedMs());
       }
       tick();
       var intervalId = setInterval(tick, 1000);
+      function syncPauseButtonLabel() {
+        if (pauseBtn) pauseBtn.textContent = paused ? "Resume" : "Pause";
+      }
       function closePerformanceMode() {
         clearInterval(intervalId);
         isStagetimeMode = false;
         document.body.classList.toggle("stage-lock-active", false);
         overlay.remove();
+      }
+      if (pauseBtn) {
+        pauseBtn.addEventListener("click", function (e) {
+          if (e.cancelable) e.preventDefault();
+          if (!paused) {
+            if (stopwatchEl) stopwatchEl.textContent = formatElapsed(Date.now() - startMs - totalPaused);
+            paused = true;
+            pauseStartedAt = Date.now();
+          } else {
+            totalPaused += Date.now() - pauseStartedAt;
+            pauseStartedAt = 0;
+            paused = false;
+            tick();
+          }
+          syncPauseButtonLabel();
+        });
+      }
+      if (nextBtn) {
+        nextBtn.addEventListener("click", function (e) {
+          if (e.cancelable) e.preventDefault();
+          currentIdx += 1;
+          if (currentIdx >= jokesInSet.length) {
+            if (titleEl) titleEl.textContent = "End of set";
+            nextBtn.disabled = true;
+            return;
+          }
+          if (titleEl) titleEl.textContent = jokeTitleAt(currentIdx);
+        });
       }
       var exitEl = overlay.querySelector(".performance-mode-exit");
       if (exitEl) {
@@ -2672,6 +2801,7 @@
           closePerformanceMode();
         });
       }
+      syncPauseButtonLabel();
     } catch (err) {
       console.error("❌ Stagetime Logic Failed:", err);
     }
@@ -3186,7 +3316,7 @@
         if (tab === "ideas") {
           returnToIdeaList();
           loadIdeas();
-          fillDatalists();
+          initTagsGhostPredictionFlow();
         }
         if (tab === "sets") returnToSetList();
         if (tab === "settings") showSettingsView("dashboard");
@@ -3233,12 +3363,12 @@
       .catch(function () {})
       .then(function () {
         loadSets();
+        initTagsGhostPredictionFlow();
       });
     initModals();
     initJokesModalDelegation();
     initJokesFolderChrome();
     initSetsPanelDelegation();
-    fillDatalists();
     // Default to dashboard on load.
     showPanel("panel-dashboard");
   }
@@ -3432,7 +3562,7 @@
         if (e.target === ideaModalBackdrop && !ideaModalBackdrop.classList.contains("is-detail-view")) closeModal();
       });
     }
-    /* Idea detail DOM is rebuilt per open; delegate to #modal-container or #panel-ideas (in-panel #idea-detail). */
+    /* Idea detail DOM is rebuilt per open; delegate to #modal-container (global) or #panel-ideas fallback. */
     var ideaActionShell = ideaModalBackdrop || document.getElementById("panel-ideas");
     if (ideaActionShell && !ideaActionShell.dataset.ideaActionsDelegated) {
       ideaActionShell.dataset.ideaActionsDelegated = "1";
@@ -3545,25 +3675,6 @@
       });
       selectEl.value = selectedValue != null && selectedValue !== "" ? selectedValue : "";
     });
-  }
-
-  function fillDatalists() {
-    if (Array.isArray(_cache) && _cache.length > 0) {
-      updateGlobalTagDatalistFromCache();
-      return;
-    }
-    var tagDl = document.getElementById("tag-datalist");
-    if (!dataLayer) return;
-    if (tagDl && dataLayer.getAllTags) {
-      dataLayer.getAllTags().then(function (tags) {
-        tagDl.innerHTML = "";
-        (tags || []).forEach(function (t) {
-          var opt = document.createElement("option");
-          opt.value = t;
-          tagDl.appendChild(opt);
-        });
-      });
-    }
   }
 
   // Topics management removed (legacy cleanup).
@@ -3840,7 +3951,7 @@
     var contentInput = document.getElementById("idea-focus-content");
     var notesInput = document.getElementById("idea-focus-notes");
     var topicInput = document.getElementById("idea-edit-topic");
-    var tagsInput = document.getElementById("idea-edit-tags");
+    var tagsInput = document.getElementById("idea-tags-input");
     var title = titleInput ? String(titleInput.textContent || "").trim() : "";
     var content = contentInput ? String(contentInput.value || "") : "";
     var notes = notesInput ? String(notesInput.value || "") : "";
@@ -4013,13 +4124,24 @@
     }
     if (action === "delete-set") {
       if (!window.confirm("Delete this set?")) return;
-      if (window.currentSetId != null && window.dataLayer != null && typeof window.dataLayer.deleteSet === "function") {
-        window.dataLayer.deleteSet(window.currentSetId).then(function (val) {
-          if (val != null) {
-            closeModal();
-            return;
+      var setIdStr = window.currentSetId != null ? String(window.currentSetId) : "";
+      if (setIdStr !== "" && window.dataLayer != null && typeof window.dataLayer.deleteSet === "function") {
+        window.dataLayer.deleteSet(setIdStr).then(function (val) {
+          var delOkStr = val != null ? String(val) : "";
+          if (delOkStr !== "true") return;
+          window.currentSetId = null;
+          var setDetailAfterDel = getSetDetailEl();
+          if (setDetailAfterDel) {
+            setDetailAfterDel.classList.add("hidden");
+            setDetailAfterDel.innerHTML = "";
+            if (setDetailAfterDel.dataset && setDetailAfterDel.dataset.setId != null) delete setDetailAfterDel.dataset.setId;
           }
+          var panelSetsAfterDel = document.getElementById("panel-sets");
+          if (panelSetsAfterDel) revealFolderLayer(panelSetsAfterDel);
+          document.getElementById("panel-sets-list")?.classList.remove("hidden");
           closeModal();
+          showToast("Set deleted");
+          loadSets();
         }).catch(function () {});
       }
     }
@@ -4114,7 +4236,18 @@
   window.closeSetPickerModal = closeSetPickerModal;
   window.showSetDetail = showSetDetail;
   window.closeModal = function (e) {
-    if (e) e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
+    if (globalConversionId != null) {
+      var jokeEl = getJokeDetailEl();
+      var mc = document.getElementById("modal-container");
+      if (jokeEl) clearJokeDetailAndBack(jokeEl, mc);
+      else {
+        globalConversionId = null;
+        if (mc) mc.classList.remove("is-detail-view");
+      }
+      mapsTo("ideas");
+      return;
+    }
     closeModal();
   };
   window.handleRibbonAction = handleRibbonAction;

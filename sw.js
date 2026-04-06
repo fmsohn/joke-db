@@ -1,10 +1,10 @@
 /**
  * Stagetime PWA – Stale-While-Revalidate service worker (root scope).
  * All precache URLs are absolute from the document origin.
- * Asset v127 / app 0.3.7 — bump ASSET_VERSION / CACHE_NAME when changing icons/manifest/CSS/JS.
+ * Asset v22 / app 22 — bump ASSET_VERSION / CACHE_NAME when changing icons/manifest/CSS/JS.
  */
-const ASSET_VERSION = "127";
-const CACHE_NAME = "stagetime-v127";
+const ASSET_VERSION = "21";
+const CACHE_NAME = "stagetime-v22";
 
 const PRECACHE_URLS = [
   "/?v=" + ASSET_VERSION,

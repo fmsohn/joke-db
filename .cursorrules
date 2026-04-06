@@ -1,0 +1,34 @@
+# [cite_start]PWA Versioning, Workstation UI, & Master Guardrails [cite: 1]
+
+## 1. Architectural Integrity (The "Silo" Rule)
+- **IIFE Encapsulation**: All logic must reside within the private scope of the main IIFE in `app.js`. No variables shall exist in the global namespace.
+- [cite_start]**Controlled Global Exports**: Only "leak" functions to the `window` object at the absolute bottom of the IIFE to support HTML `onclick` compatibility. [cite: 5]
+- **Namespace Modularity**: Ensure variable names and state within specific panels (Jokes, Sets, Ideas) do not overlap to prevent state bleed.
+
+## 2. Dual-Track Versioning & Atomic Updates
+- **Atomic Versioning**: Every modification requires a simultaneous version bump in:
+  1. [cite_start]`index.html` (ASSET_VERSION) [cite: 2]
+  2. `app.js` (STAGETIME_APP_VERSION)
+  3. [cite_start]`sw.js` (CACHE_NAME) [cite: 2]
+- **Internal Asset Track**: Use an integer for cache-busting (e.g., v17). [cite_start]Always append this to local asset links in `index.html` as `?v=XX`. 
+- **External Semantic Track**: Used for GitHub releases (e.g., 1.1.2). [cite_start]This remains static in file headers and the footer until a "Product Release" is explicitly requested. [cite: 3, 4]
+
+## 3. Resource Efficiency & Component Standards
+- **Audit Before Authoring**: Search `db.js` and `app.js` for existing functions before writing new logic. Use the established `dataLayer` for all IndexedDB interactions.
+- **CSS Token Mastery**: Use `variables.css` for all colors, spacing, and timing. Hardcoded hex codes or pixel values are strictly forbidden.
+- **UI Consistency**: Utilize established patterns: `.slab-button`, `.workstation-select`, `.panel-topbar`, and `.3d-neon-slab`.
+
+## 4. Workstation UI & CSS Precision
+- [cite_start]**3D Workstation Inputs**: Search inputs and selects must use a 2px solid `var(--primary-color)` and a 12px box-shadow. [cite: 6]
+- [cite_start]**Header Architecture**: Maintain the Two-Row Flexbox layout in the Jokes and Ideas modules with a strict 2px vertical gap between navigation and control rows. [cite: 7, 8]
+- **Scoped Selectors**: Use descendant selectors (e.g., `.joke-master-document .btn`) to prevent style bleeding.
+
+## 5. Technical Quality & Stability
+- **Explicit Code Blocks**: Do not use ellipses (...) or comments like "rest of code remains the same." Provide full, functional code blocks for every modification.
+- **Immutable Context**: Never revert established UI/UX fixes (e.g., title-input synchronization or removal of duplicate headings).
+- **Data Type Safety**: Handle null/undefined values using the pattern: `val != null ? String(val) : ""`.
+- **Unique DOM IDs**: Every interactive element must have a unique, descriptive ID to prevent data-binding collisions.
+
+## 6. Invisible Personalization
+- **Utility-First**: Leverage professional efficiency standards (MBA/Sales background) to inform technical snappiness and dashboard utility.
+- **Zero-Footprint**: Do not reference persona details or conversation history within code comments, Git messages, or UI text.

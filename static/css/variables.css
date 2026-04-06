@@ -17,6 +17,7 @@
   --border-color: rgba(255, 255, 255, 0.12);
   /* Raised slab fill (expanded joke actions, etc.) */
   --slab-physics-bg: #111111;
+  --slab-shadow: 3px 3px 0 #000;
   --error-red: #ff4d4d;
   /* Stage timer / live readouts (high-visibility green) */
   --neon-green: #39ff14;
@@ -45,6 +46,8 @@
   /* Centered glow headers (set detail title, shared with joke-detail-title) */
   --neon-title-glow: 0 0 14px var(--glow-neon), 0 0 28px rgba(var(--accent-rgb), 0.42), 0 0 1px rgba(var(--accent-rgb), 1);
   --neon-glow-cyan: var(--neon-title-glow);
+  --neon-blue: var(--accent-color);
+  --neon-glow-blue: var(--neon-title-glow);
 
   --radius: 12px;
   --shadow-card: 0 6px 12px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.35);

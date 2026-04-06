@@ -4,20 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="theme-color" content="#050505">
-  <meta name="version" content="0.3.7">
+  <meta name="version" content="0.4.1">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="StageTime">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>StageTime</title>
   
-  <!-- Asset v127 — cache-bust with ASSET_VERSION + sw.js CACHE_NAME (app 0.3.7) -->
-  <link rel="icon" type="image/png" href="/static/icons/AppIcon.png?v=127">
-  <link rel="apple-touch-icon" href="/static/icons/AppIcon.png?v=127">
-  <link rel="manifest" href="/manifest.json?v=127">
+  <!-- Asset v22 — cache-bust with ASSET_VERSION + sw.js CACHE_NAME (app 22) -->
+  <link rel="icon" type="image/png" href="/static/icons/AppIcon.png?v=22">
+  <link rel="apple-touch-icon" href="/static/icons/AppIcon.png?v=22">
+  <link rel="manifest" href="/manifest.json?v=22">
   
-  <script>var ASSET_VERSION = "127";</script>
-  <link rel="stylesheet" href="/static/css/variables.css?v=127">
-  <link rel="stylesheet" href="/static/css/workstation.css?v=127">
+  <script>var ASSET_VERSION = "22";</script>
+  <link rel="stylesheet" href="/static/css/variables.css?v=22">
+  <link rel="stylesheet" href="/static/css/workstation.css?v=22">
 
   <script>
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
@@ -38,7 +38,7 @@
   <div id="app-shell">
     <div id="panel-home">
       <div id="home-hub-v105">
-        <img src="/static/icons/logo.png" alt="StageTime" class="workstation-logo" width="400" height="400">
+        <img src="/static/icons/logo.png?v=22" alt="StageTime" class="workstation-logo" width="400" height="400">
         <div class="stats-container" aria-label="Library overview">
           <div class="stat-tile" data-stat="jokes"><span class="stat-value" id="dash-stat-jokes">0</span><span class="stat-label">Jokes</span></div>
           <div class="stat-tile" data-stat="runtime"><span class="stat-value" id="dash-stat-runtime">00:00</span><span class="stat-label">Runtime</span></div>
@@ -58,6 +58,7 @@
       <section id="panel-ideas" class="panel folder-layer hidden" data-folder="ideas">
         <div id="ideas-workstation" class="panel-body">
           <div id="panel-ideas-list">
+            <h2 id="ideas-folder-header" class="folder-header">Ideas</h2>
             <input type="text" id="idea-search-input" placeholder="Search ideas..." class="search-bar">
             <div id="quick-add-row" class="quick-add-row">
               <input type="text" id="new-idea-title-input" placeholder="Quick idea..." maxlength="500">
@@ -140,7 +141,7 @@
     </main>
   </div>
 
-  <datalist id="tag-datalist"></datalist>
+  <div id="modal-container" class="hidden" aria-hidden="true"></div>
 
   <div id="set-picker-modal" class="hidden" role="dialog" aria-modal="true" aria-label="Select a set">
     <div id="set-picker-overlay" aria-hidden="true"></div>
@@ -151,8 +152,8 @@
     </div>
   </div>
 
-  <script src="/static/js/dexie.min.js?v=127"></script>
-  <script src="/static/js/db.js?v=127"></script>
-  <script src="/static/js/app.js?v=127"></script>
+  <script src="/static/js/dexie.min.js?v=22"></script>
+  <script src="/static/js/db.js?v=22"></script>
+  <script src="/static/js/app.js?v=22"></script>
 </body>
 </html>

@@ -410,6 +410,21 @@ html body #panel-settings .setting-controls {
     padding-top: calc(var(--spacing-sm) + env(safe-area-inset-top, 0));
 }
 
+#ideas-folder-header.folder-header {
+    font-family: 'Slab-3D', sans-serif;
+    color: var(--neon-blue);
+    text-shadow: var(--neon-glow-blue);
+    padding: 1.2rem 1rem;
+    margin: 0;
+    font-size: 1.8rem;
+    text-transform: uppercase;
+}
+
+#panel-ideas.is-viewing-detail #ideas-folder-header.folder-header,
+body.modal-open .folder-header {
+    display: none;
+}
+
 /* Jokes folder: fill available viewport height so list + filter slicer can use full column */
 #app-shell #panel-jokes.panel.folder-layer:not(.hidden) {
     display: flex;
@@ -984,21 +999,6 @@ body #modal-container {
     margin-left: 0;
 }
 
-body #modal-container.modal-joke {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    border-left: 5px solid gold;
-}
-
-/* Idea Silo: top of viewport; column flex so use justify-content (main axis = vertical) */
-body #modal-container.modal-idea {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    align-items: center;
-}
-
 /* Workstation: idea silo lives in #idea-detail inside the ideas panel */
 body #panel-ideas.modal-idea #idea-detail {
     display: flex;
@@ -1018,6 +1018,46 @@ body #panel-ideas.modal-idea #idea-detail {
     padding: 0;
     background: transparent;
     float: none;
+}
+
+/* workstation.css - v0.4.1 — idea/joke detail spine width + modal alignment */
+.idea-silo-spine,
+.joke-silo-spine {
+    width: 95%;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 1.5rem 1rem;
+    box-sizing: border-box;
+}
+
+body #modal-container.modal-idea,
+body #modal-container.modal-joke {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    width: 100%;
+}
+
+/* Idea detail: global overlay silo (#modal-container.modal-idea); content root is .idea-silo-spine */
+body #modal-container.modal-idea {
+    flex-direction: column;
+    align-items: center;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body #modal-container.modal-idea > .idea-silo-spine {
+    flex: 0 1 auto;
+    width: 95%;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+}
+
+body #modal-container.modal-joke {
+    border-left: 5px solid gold;
 }
 
 /* Joke detail: same node as .focus-slab — keep slab fill/padding */
@@ -1043,14 +1083,10 @@ body #panel-ideas.modal-idea #idea-detail .modal-detail-shell {
 
 body #modal-container.modal-idea .idea-silo-spine,
 body #panel-ideas.modal-idea #idea-detail .idea-silo-spine {
-    width: 100%;
-    max-width: 600px;
-    margin: 0 auto;
     background: var(--bg-app);
     border-left: 10px solid var(--accent-color);
     box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.25);
     filter: drop-shadow(-5px 0 10px rgba(var(--accent-rgb), 0.4));
-    padding: 20px 30px;
     display: flex;
     flex-direction: column;
 }
@@ -1148,6 +1184,25 @@ body #panel-ideas.modal-idea #idea-detail .idea-silo-spine .silo-footer-actions 
     align-items: center;
     justify-content: center;
     overflow: visible;
+}
+
+/* Idea footer: slab-button shares silo-slab neon row (override #app-shell .slab-button accent fill when both classes). */
+body #app-shell #panel-ideas .idea-silo-spine .silo-footer-actions .silo-slab.slab-button,
+body #modal-container.modal-idea .idea-silo-spine .silo-footer-actions .silo-slab.slab-button {
+    background: var(--bg-recess);
+    color: var(--text-dim);
+    border: 1px solid rgba(var(--accent-rgb), 0.3);
+    border-radius: 0;
+    box-shadow: 4px 4px 0px #000;
+    font-weight: bold;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+}
+
+body #app-shell #panel-ideas .idea-silo-spine .silo-footer-actions .silo-slab.slab-button:active,
+body #modal-container.modal-idea .idea-silo-spine .silo-footer-actions .silo-slab.slab-button:active {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0px #000;
 }
 
 body #modal-container.modal-idea .idea-silo-spine .silo-slab:active,
@@ -1406,6 +1461,23 @@ body #panel-ideas.modal-idea #idea-detail {
     flex: 1 1 140px;
     min-width: 100px;
     max-width: 100%;
+}
+
+#joke-tags-input {
+    border: 2px solid var(--primary-color);
+    box-shadow:
+        inset 0 5px 16px rgba(0, 0, 0, 0.82),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+#joke-tags-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow:
+        inset 0 4px 14px rgba(0, 0, 0, 0.75),
+        0 0 0 1px var(--primary-color),
+        0 4px 12px rgba(var(--accent-rgb), 0.4);
 }
 
 .joke-master-document .joke-master-ribbon-row .workstation-select {
@@ -2036,12 +2108,112 @@ body #panel-ideas.modal-idea #idea-detail {
     z-index: 99999;
     display: flex;
     flex-direction: column;
+    align-items: stretch;
+    justify-content: space-between;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.performance-mode-stage {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    padding-top: 40px;
+    padding: 40px var(--spacing-md) var(--spacing-md);
+    min-height: 0;
+}
+
+.performance-mode-stopwatch {
+    color: var(--neon-green);
+    font-size: clamp(2rem, 8vw, 3rem);
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    margin-bottom: var(--spacing-md);
+}
+
+.performance-mode-set-meta {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin: 0 0 var(--spacing-sm);
+    text-align: center;
+}
+
+.performance-mode-current-title {
+    color: var(--accent-color);
+    font-size: clamp(1.1rem, 4.5vw, 1.5rem);
+    font-weight: 800;
+    text-align: center;
+    margin: 0;
+    padding: 0 var(--spacing-sm);
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.performance-mode-exit {
+    color: var(--text-dim);
+    text-align: center;
+    font-size: 0.8rem;
+    padding: var(--spacing-sm);
+    cursor: pointer;
+    margin: 0;
+}
+
+.performance-mode-controls {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md) var(--spacing-md) calc(var(--spacing-md) + var(--safe-bottom));
+    background: var(--slab-physics-bg);
+    border-top: 1px solid rgba(var(--accent-rgb), 0.15);
+    box-sizing: border-box;
+}
+
+.performance-mode-overlay .slab-button {
+    height: var(--input-height);
+    background-color: var(--accent-color);
+    color: #000;
+    border: 2px solid #000;
+    border-radius: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.05s, box-shadow 0.05s;
+}
+
+.performance-mode-overlay .performance-mode-slab.slab-button {
+    box-shadow: var(--slab-shadow);
+    flex: 1 1 auto;
+    min-height: var(--input-height);
+    max-width: 220px;
+}
+
+.performance-mode-overlay .slab-button:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 transparent;
+}
+
+.performance-mode-overlay .slab-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 
 @media (max-width: 480px) {
+    body #modal-container.modal-idea .idea-silo-spine {
+        width: 100vw;
+        max-width: none;
+        margin: 0;
+        border: none;
+        padding: var(--spacing-md);
+        box-sizing: border-box;
+    }
+
     body #modal-container.modal-idea .idea-silo-spine .silo-footer-actions .slab-button,
     body #panel-ideas.modal-idea #idea-detail .idea-silo-spine .silo-footer-actions .slab-button,
     body #modal-container.modal-idea .idea-silo-spine .silo-footer-actions .silo-slab,
