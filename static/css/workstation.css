@@ -2104,24 +2104,37 @@ body #panel-ideas.modal-idea #idea-detail {
     left: 0;
     width: 100vw;
     height: 100dvh;
+    max-height: 100dvh;
     background: #000;
     z-index: 99999;
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    justify-content: space-between;
+    justify-content: flex-start;
     padding: 0;
     box-sizing: border-box;
+    overflow: hidden;
 }
 
-.performance-mode-stage {
+.performance-mode-scroll-wrap {
     flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.performance-mode-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
-    padding: 40px var(--spacing-md) var(--spacing-md);
-    min-height: 0;
+    text-align: center;
+    padding: clamp(16px, 4vw, 28px) var(--spacing-md) var(--spacing-md);
+    background: #000;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.65);
 }
 
 .performance-mode-stopwatch {
@@ -2129,47 +2142,162 @@ body #panel-ideas.modal-idea #idea-detail {
     font-size: clamp(2rem, 8vw, 3rem);
     font-weight: 900;
     font-variant-numeric: tabular-nums;
-    margin-bottom: var(--spacing-md);
+    margin: 0 0 var(--spacing-sm);
 }
 
 .performance-mode-set-meta {
-    color: var(--text-dim);
-    font-size: 0.85rem;
-    margin: 0 0 var(--spacing-sm);
-    text-align: center;
-}
-
-.performance-mode-current-title {
-    color: var(--accent-color);
-    font-size: clamp(1.1rem, 4.5vw, 1.5rem);
-    font-weight: 800;
-    text-align: center;
-    margin: 0;
-    padding: 0 var(--spacing-sm);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
     max-width: 100%;
     box-sizing: border-box;
 }
 
-.performance-mode-exit {
-    color: var(--text-dim);
-    text-align: center;
-    font-size: 0.8rem;
-    padding: var(--spacing-sm);
-    cursor: pointer;
+.performance-mode-set-title {
+    color: var(--accent-color);
+    font-size: clamp(1.25rem, 5.2vw, 1.9rem);
+    font-weight: 900;
+    line-height: 1.15;
     margin: 0;
+    padding: 0 var(--spacing-sm);
+    max-width: 100%;
+    box-sizing: border-box;
+    text-shadow: var(--neon-title-glow);
+    display: block;
+    width: 100%;
+    word-break: break-word;
 }
 
-.performance-mode-controls {
-    flex: 0 0 auto;
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
-    align-items: center;
-    gap: var(--spacing-md);
-    padding: var(--spacing-md) var(--spacing-md) calc(var(--spacing-md) + var(--safe-bottom));
-    background: var(--slab-physics-bg);
-    border-top: 1px solid rgba(var(--accent-rgb), 0.15);
+.performance-mode-set-time {
+    color: var(--text-dim);
+    font-size: clamp(0.85rem, 3.2vw, 1rem);
+    margin: 0;
+    padding: 0 var(--spacing-sm);
+    max-width: 100%;
     box-sizing: border-box;
+    display: block;
+    width: 100%;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+.performance-mode-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    scroll-padding-top: 150px;
+    padding: 0 var(--spacing-md) calc(var(--input-height) + var(--spacing-md) * 2 + var(--safe-bottom) + 12px);
+    box-sizing: border-box;
+}
+
+.performance-mode-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    max-width: 720px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.performance-card {
+    background: var(--slab-physics-bg);
+    border: 2px solid rgba(var(--accent-rgb), 0.22);
+    border-radius: var(--radius);
+    padding: var(--spacing-md);
+    box-shadow: var(--slab-shadow);
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    scroll-margin-top: 0;
+}
+
+.performance-card .card-header {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+}
+
+.performance-card-title-wrap {
+    min-width: 0;
+    overflow: hidden;
+    flex: 1;
+}
+
+.performance-card-kind {
+    margin-right: 8px;
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    opacity: 0.8;
+}
+
+.performance-card .performance-card-title {
+    color: #f0f4f8;
+    font-size: clamp(1rem, 3.8vw, 1.2rem);
+    font-weight: 800;
+    margin: 0;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.performance-card .card-body {
+    display: none;
+}
+
+article.performance-card.is-expanded .card-body {
+    display: block;
+    padding-top: 12px;
+    border-top: 1px solid rgba(var(--accent-rgb), 0.2);
+    margin-top: 12px;
+}
+
+article.performance-card.is-expanded .performance-card-title {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+.performance-card-body-line {
+    color: var(--text-dim);
+    font-size: 0.88rem;
+    line-height: 1.45;
+    margin: 0 0 8px;
+}
+
+.performance-card-body-line:last-child {
+    margin-bottom: 0;
+}
+
+.performance-card[data-item-type="idea"] {
+    border-left: 3px solid rgba(var(--accent-rgb), 0.55);
+}
+
+.active-joke-highlight {
+    border: 2px solid var(--accent-color);
+    box-shadow: var(--slab-shadow), 0 0 15px rgba(var(--accent-rgb), 0.6);
+}
+
+.performance-mode-footer-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100000;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    align-items: stretch;
+    gap: 8px;
+    padding: var(--spacing-md) var(--spacing-md) calc(var(--spacing-md) + var(--safe-bottom));
+    background: rgba(8, 8, 8, 0.88);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-top: 1px solid rgba(var(--accent-rgb), 0.22);
+    box-sizing: border-box;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.45);
 }
 
 .performance-mode-overlay .slab-button {
@@ -2187,11 +2315,19 @@ body #panel-ideas.modal-idea #idea-detail {
     transition: transform 0.05s, box-shadow 0.05s;
 }
 
-.performance-mode-overlay .performance-mode-slab.slab-button {
+.performance-mode-overlay .performance-mode-footer-bar .performance-mode-slab.slab-button {
     box-shadow: var(--slab-shadow);
-    flex: 1 1 auto;
     min-height: var(--input-height);
-    max-width: 220px;
+    min-width: 0;
+    max-width: none;
+    font-size: clamp(0.58rem, 2.8vw, 0.72rem);
+    padding: 0 4px;
+}
+
+.performance-mode-overlay #performance-mode-close.performance-mode-slab {
+    text-transform: none;
+    font-size: clamp(1rem, 4vw, 1.35rem);
+    font-weight: 900;
 }
 
 .performance-mode-overlay .slab-button:active {

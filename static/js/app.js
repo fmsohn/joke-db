@@ -2695,49 +2695,112 @@
         showEmptySetDetailStageMessage("You need a setlist before you can go on stage!");
         return;
       }
-      var jokesInSet = items.filter(function (i) {
+      var performanceItems = items.filter(function (i) {
         if (!i) return false;
         var typRaw = i.type;
         var typ = typRaw != null ? String(typRaw) : "joke";
-        return typ === "joke";
+        return typ === "joke" || typ === "idea";
       });
-      if (jokesInSet.length === 0) {
-        showToast("Add some jokes before entering StageTime mode! 🎤");
+      if (performanceItems.length === 0) {
+        showToast("Add jokes or ideas to your set before entering StageTime mode! 🎤");
+        return;
+      }
+      var overlay = document.getElementById("stagetime-overlay");
+      if (!overlay) {
+        console.error("❌ Stagetime: #stagetime-overlay missing from DOM");
         return;
       }
       var val = activeSetDetailName;
       var setName = val != null ? String(val) : "";
+      var setJokesOnly = performanceItems.filter(function (i) {
+        return i && (i.type == null || String(i.type) === "joke");
+      });
+      var setTimeStr = setJokesOnly.length > 0 ? calculateSetTime(setJokesOnly) : "0:00";
+      var setTimeLine = "Set time: " + setTimeStr;
       var startMs = Date.now();
-      var overlay = document.createElement("div");
-      overlay.className = "performance-mode-overlay";
-      overlay.setAttribute("aria-hidden", "false");
-      var currentIdx = 0;
-      function jokeTitleAt(i) {
-        var j = jokesInSet[i];
-        if (!j) return "";
-        var raw = formatSetDetailItemTitle(j);
-        val = raw;
-        return val != null ? String(val) : "";
+      var currentActiveIndex = 0;
+      function performanceCardKindLabel(item) {
+        item = item || {};
+        return item.type === "idea" ? "Idea" : "Joke";
       }
-      var initialTitle = jokeTitleAt(0);
+      function performanceCardBodyBlock(item) {
+        item = item || {};
+        var tit = item.title != null ? String(item.title).trim() : "";
+        var pr = item.premise != null ? String(item.premise).trim() : "";
+        var punch = item.punchline != null ? String(item.punchline).trim() : "";
+        var paras = [];
+        if (item.type === "idea") {
+          var ideaContent = item.content != null ? String(item.content).trim() : "";
+          var body = ideaContent !== "" ? ideaContent : pr;
+          var noteA = item.notes != null ? String(item.notes).trim() : "";
+          var noteB = item.setup_notes != null ? String(item.setup_notes).trim() : "";
+          var ideaNotes = noteA !== "" ? noteA : noteB;
+          if (body !== "" && body !== tit) paras.push(body);
+          if (ideaNotes !== "" && ideaNotes !== tit && ideaNotes !== body) paras.push(ideaNotes);
+        } else {
+          if (pr === "") pr = item.content != null ? String(item.content).trim() : "";
+          if (punch === "") punch = item.act_out != null ? String(item.act_out).trim() : "";
+          if (pr !== "" && pr !== tit) paras.push(pr);
+          if (punch !== "" && punch !== tit) paras.push(punch);
+        }
+        if (paras.length === 0) return "";
+        return paras
+          .map(function (p) {
+            return "<p class=\"performance-card-body-line\">" + escapeHtml(p) + "</p>";
+          })
+          .join("");
+      }
+      function renderStagetime() {
+        var cardsHtml = "";
+        for (var ci = 0; ci < performanceItems.length; ci++) {
+          var item = performanceItems[ci];
+          var isIdea = item && item.type === "idea";
+          var titlePlain = formatSetDetailItemTitle(item);
+          var kind = performanceCardKindLabel(item);
+          var bodyContent = performanceCardBodyBlock(item);
+          var bodyHtml = bodyContent !== "" ? "<div class=\"card-body\">" + bodyContent + "</div>" : "";
+          var exp = ci === currentActiveIndex ? " is-expanded active-joke-highlight" : "";
+          cardsHtml +=
+            "<article class=\"performance-card" + exp + "\" data-stagetime-index=\"" + ci + "\" id=\"stagetime-card-" + ci + "\" data-item-type=\"" + (isIdea ? "idea" : "joke") + "\">" +
+            "<div class=\"card-header\">" +
+            "<span class=\"performance-card-kind\">" + escapeHtml("[" + kind + "]") + "</span>" +
+            "<div class=\"performance-card-title-wrap\">" +
+            "<h3 class=\"performance-card-title\">" + escapeHtml(titlePlain) + "</h3>" +
+            "</div>" +
+            "</div>" +
+            bodyHtml +
+            "</article>";
+        }
+        return cardsHtml;
+      }
+      overlay.setAttribute("aria-hidden", "false");
       overlay.innerHTML =
-        "<div class=\"performance-mode-stage\">" +
+        "<div class=\"performance-mode-scroll-wrap\">" +
+        "<div class=\"performance-mode-scroll\" id=\"performance-mode-scroll\">" +
+        "<header class=\"performance-mode-header\">" +
         "<div class=\"performance-mode-stopwatch\" id=\"performance-mode-stopwatch\">0:00</div>" +
-        "<p class=\"performance-mode-set-meta\">" + escapeHtml(setName) + "</p>" +
-        "<h2 class=\"performance-mode-current-title\" id=\"performance-mode-current-title\">" + escapeHtml(initialTitle) + "</h2>" +
+        "<div class=\"performance-mode-set-meta\">" +
+        "<h1 class=\"performance-mode-set-title\">" + escapeHtml(setName) + "</h1>" +
+        "<p class=\"performance-mode-set-time\">" + escapeHtml(setTimeLine) + "</p>" +
         "</div>" +
-        "<p class=\"performance-mode-exit\" role=\"button\" tabindex=\"0\">Tap to exit</p>" +
-        "<footer class=\"performance-mode-controls\" aria-label=\"Stage controls\">" +
-        "<button type=\"button\" id=\"performance-mode-pause\" class=\"slab-button performance-mode-slab\">Pause</button>" +
-        "<button type=\"button\" id=\"performance-mode-next\" class=\"slab-button performance-mode-slab\">Next</button>" +
+        "</header>" +
+        "<div class=\"performance-mode-list\">" +
+        renderStagetime() +
+        "</div></div></div>" +
+        "<footer class=\"performance-mode-footer-bar\" aria-label=\"Stage controls\">" +
+        "<button type=\"button\" id=\"performance-mode-pause\" class=\"slab-button btn-lift performance-mode-slab\">Pause</button>" +
+        "<button type=\"button\" id=\"performance-mode-prev\" class=\"slab-button btn-lift performance-mode-slab\">Prev</button>" +
+        "<button type=\"button\" id=\"performance-mode-next\" class=\"slab-button btn-lift performance-mode-slab\">Next</button>" +
+        "<button type=\"button\" id=\"performance-mode-close\" class=\"slab-button btn-lift performance-mode-slab\" aria-label=\"Exit performance mode\">✕</button>" +
         "</footer>";
       document.body.classList.toggle("stage-lock-active", true);
       isStagetimeMode = true;
-      document.body.appendChild(overlay);
+      overlay.classList.remove("hidden");
       var stopwatchEl = document.getElementById("performance-mode-stopwatch");
-      var titleEl = document.getElementById("performance-mode-current-title");
       var pauseBtn = document.getElementById("performance-mode-pause");
+      var prevBtn = document.getElementById("performance-mode-prev");
       var nextBtn = document.getElementById("performance-mode-next");
+      var closeBtn = document.getElementById("performance-mode-close");
       var paused = false;
       var pauseStartedAt = 0;
       var totalPaused = 0;
@@ -2761,11 +2824,25 @@
       function syncPauseButtonLabel() {
         if (pauseBtn) pauseBtn.textContent = paused ? "Resume" : "Pause";
       }
+      function applyActiveHighlight() {
+        document.querySelectorAll(".performance-card").forEach(function (node) {
+          node.classList.remove("is-expanded", "active-joke-highlight");
+        });
+        var card = document.getElementById("stagetime-card-" + String(currentActiveIndex));
+        if (card) {
+          card.classList.add("is-expanded", "active-joke-highlight");
+          card.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+        if (prevBtn) prevBtn.disabled = currentActiveIndex <= 0;
+        if (nextBtn) nextBtn.disabled = currentActiveIndex >= performanceItems.length - 1;
+      }
       function closePerformanceMode() {
         clearInterval(intervalId);
         isStagetimeMode = false;
         document.body.classList.toggle("stage-lock-active", false);
-        overlay.remove();
+        overlay.innerHTML = "";
+        overlay.classList.add("hidden");
+        overlay.setAttribute("aria-hidden", "true");
       }
       if (pauseBtn) {
         pauseBtn.addEventListener("click", function (e) {
@@ -2783,24 +2860,29 @@
           syncPauseButtonLabel();
         });
       }
+      if (prevBtn) {
+        prevBtn.addEventListener("click", function (e) {
+          if (e.cancelable) e.preventDefault();
+          if (currentActiveIndex <= 0) return;
+          currentActiveIndex -= 1;
+          applyActiveHighlight();
+        });
+      }
       if (nextBtn) {
         nextBtn.addEventListener("click", function (e) {
           if (e.cancelable) e.preventDefault();
-          currentIdx += 1;
-          if (currentIdx >= jokesInSet.length) {
-            if (titleEl) titleEl.textContent = "End of set";
-            nextBtn.disabled = true;
-            return;
-          }
-          if (titleEl) titleEl.textContent = jokeTitleAt(currentIdx);
+          if (currentActiveIndex >= performanceItems.length - 1) return;
+          currentActiveIndex += 1;
+          applyActiveHighlight();
         });
       }
-      var exitEl = overlay.querySelector(".performance-mode-exit");
-      if (exitEl) {
-        exitEl.addEventListener("click", function () {
+      if (closeBtn) {
+        closeBtn.addEventListener("click", function (e) {
+          if (e.cancelable) e.preventDefault();
           closePerformanceMode();
         });
       }
+      applyActiveHighlight();
       syncPauseButtonLabel();
     } catch (err) {
       console.error("❌ Stagetime Logic Failed:", err);
