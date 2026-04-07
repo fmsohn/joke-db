@@ -214,6 +214,14 @@ body.stage-lock-active {
     color: var(--text-dim);
 }
 
+.stat-box {
+    cursor: pointer;
+}
+
+.stat-box:active {
+    transform: scale(0.98);
+}
+
 .status-slicer {
     width: 100%;
     margin: 0;
@@ -2103,8 +2111,7 @@ body #panel-ideas.modal-idea #idea-detail {
     top: 0;
     left: 0;
     width: 100vw;
-    height: 100dvh;
-    max-height: 100dvh;
+    height: 100vh;
     background: #000;
     z-index: 99999;
     display: flex;
@@ -2116,17 +2123,72 @@ body #panel-ideas.modal-idea #idea-detail {
     overflow: hidden;
 }
 
-.performance-mode-scroll-wrap {
+.performance-mode-start-gate {
     flex: 1 1 auto;
     min-height: 0;
     display: flex;
     flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(20px, 5vw, 36px);
+    box-sizing: border-box;
+    position: relative;
+}
+
+.performance-mode-gate-close {
+    position: absolute;
+    top: clamp(12px, 3vw, 20px);
+    right: clamp(12px, 3vw, 20px);
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
+.performance-mode-start-gate-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 1rem;
+    width: 100%;
+    max-width: 22rem;
+}
+
+.performance-mode-start-kicker {
+    margin: 0;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
+
+.performance-mode-start-title {
+    margin: 0;
+}
+
+.performance-mode-start-btn {
+    margin-top: 0.5rem;
+    min-width: 12rem;
+    padding: 14px 24px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+}
+
+.performance-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 20px;
+    box-sizing: border-box;
+    scroll-padding-top: 12px;
 }
 
 .performance-mode-header {
-    position: sticky;
-    top: 0;
-    z-index: 10;
     flex: 0 0 auto;
     display: flex;
     flex-direction: column;
@@ -2181,17 +2243,6 @@ body #panel-ideas.modal-idea #idea-detail {
     width: 100%;
     line-height: 1.3;
     word-break: break-word;
-}
-
-.performance-mode-scroll {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-    -webkit-overflow-scrolling: touch;
-    scroll-padding-top: 150px;
-    padding: 0 var(--spacing-md) calc(var(--input-height) + var(--spacing-md) * 2 + var(--safe-bottom) + 12px);
-    box-sizing: border-box;
 }
 
 .performance-mode-list {
@@ -2282,10 +2333,7 @@ article.performance-card.is-expanded .performance-card-title {
 }
 
 .performance-mode-footer-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    flex: 0 0 auto;
     z-index: 100000;
     display: grid;
     grid-template-columns: repeat(4, 1fr);

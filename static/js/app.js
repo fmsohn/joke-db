@@ -11,11 +11,11 @@
   var isDeleting = false;
 
   /** Bumped with releases; pair with index.html ASSET_VERSION + sw.js for cache/SW refresh. */
-  window.STAGETIME_APP_VERSION = "22";
+  window.STAGETIME_APP_VERSION = "23";
   window.currentJokeId = null;
   window.currentSetId = null;
-  // Cache-buster asset version: must match index.html ASSET_VERSION and ?v=... querystrings (Asset v22 / app 22).
-  var VERSION = typeof ASSET_VERSION !== "undefined" ? String(ASSET_VERSION) : "22";
+  // Cache-buster asset version: must match index.html ASSET_VERSION and ?v=... querystrings (Asset v23 / app 23).
+  var VERSION = typeof ASSET_VERSION !== "undefined" ? String(ASSET_VERSION) : "23";
   window.VERSION = VERSION;
   (function syncVersionFooter() {
     var el = document.getElementById("version-display");
@@ -2717,8 +2717,8 @@
       });
       var setTimeStr = setJokesOnly.length > 0 ? calculateSetTime(setJokesOnly) : "0:00";
       var setTimeLine = "Set time: " + setTimeStr;
-      var startMs = Date.now();
       var currentActiveIndex = 0;
+      var intervalId = null;
       function performanceCardKindLabel(item) {
         item = item || {};
         return item.type === "idea" ? "Idea" : "Joke";
@@ -2773,29 +2773,47 @@
         }
         return cardsHtml;
       }
-      overlay.setAttribute("aria-hidden", "false");
-      overlay.innerHTML =
-        "<div class=\"performance-mode-scroll-wrap\">" +
-        "<div class=\"performance-mode-scroll\" id=\"performance-mode-scroll\">" +
-        "<header class=\"performance-mode-header\">" +
-        "<div class=\"performance-mode-stopwatch\" id=\"performance-mode-stopwatch\">0:00</div>" +
-        "<div class=\"performance-mode-set-meta\">" +
-        "<h1 class=\"performance-mode-set-title\">" + escapeHtml(setName) + "</h1>" +
-        "<p class=\"performance-mode-set-time\">" + escapeHtml(setTimeLine) + "</p>" +
-        "</div>" +
-        "</header>" +
-        "<div class=\"performance-mode-list\">" +
-        renderStagetime() +
-        "</div></div></div>" +
-        "<footer class=\"performance-mode-footer-bar\" aria-label=\"Stage controls\">" +
-        "<button type=\"button\" id=\"performance-mode-pause\" class=\"slab-button btn-lift performance-mode-slab\">Pause</button>" +
-        "<button type=\"button\" id=\"performance-mode-prev\" class=\"slab-button btn-lift performance-mode-slab\">Prev</button>" +
-        "<button type=\"button\" id=\"performance-mode-next\" class=\"slab-button btn-lift performance-mode-slab\">Next</button>" +
-        "<button type=\"button\" id=\"performance-mode-close\" class=\"slab-button btn-lift performance-mode-slab\" aria-label=\"Exit performance mode\">✕</button>" +
-        "</footer>";
-      document.body.classList.toggle("stage-lock-active", true);
-      isStagetimeMode = true;
-      overlay.classList.remove("hidden");
+      function exitPerformanceFullscreen() {
+        try {
+          if (document.exitFullscreen) {
+            document.exitFullscreen().catch(function () {});
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          }
+        } catch (fullscreenErr) {}
+      }
+      function closeStagetimeOverlay() {
+        exitPerformanceFullscreen();
+        if (intervalId != null) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+        isStagetimeMode = false;
+        document.body.classList.toggle("stage-lock-active", false);
+        overlay.innerHTML = "";
+        overlay.classList.add("hidden");
+        overlay.setAttribute("aria-hidden", "true");
+      }
+      function mountPerformanceUiAfterStart() {
+        var startMs = Date.now();
+        overlay.innerHTML =
+          "<header class=\"performance-mode-header\">" +
+          "<div class=\"performance-mode-stopwatch\" id=\"performance-mode-stopwatch\">0:00</div>" +
+          "<div class=\"performance-mode-set-meta\">" +
+          "<h1 class=\"performance-mode-set-title\">" + escapeHtml(setName) + "</h1>" +
+          "<p class=\"performance-mode-set-time\">" + escapeHtml(setTimeLine) + "</p>" +
+          "</div>" +
+          "</header>" +
+          "<div class=\"performance-body\" id=\"performance-mode-scroll\">" +
+          "<div class=\"performance-mode-list\">" +
+          renderStagetime() +
+          "</div></div>" +
+          "<footer class=\"performance-mode-footer-bar\" aria-label=\"Stage controls\">" +
+          "<button type=\"button\" id=\"performance-mode-pause\" class=\"slab-button btn-lift performance-mode-slab\">Pause</button>" +
+          "<button type=\"button\" id=\"performance-mode-prev\" class=\"slab-button btn-lift performance-mode-slab\">Prev</button>" +
+          "<button type=\"button\" id=\"performance-mode-next\" class=\"slab-button btn-lift performance-mode-slab\">Next</button>" +
+          "<button type=\"button\" id=\"performance-mode-close\" class=\"slab-button btn-lift performance-mode-slab\" aria-label=\"Exit performance mode\">✕</button>" +
+          "</footer>";
       var stopwatchEl = document.getElementById("performance-mode-stopwatch");
       var pauseBtn = document.getElementById("performance-mode-pause");
       var prevBtn = document.getElementById("performance-mode-prev");
@@ -2820,7 +2838,7 @@
         stopwatchEl.textContent = formatElapsed(liveElapsedMs());
       }
       tick();
-      var intervalId = setInterval(tick, 1000);
+      intervalId = setInterval(tick, 1000);
       function syncPauseButtonLabel() {
         if (pauseBtn) pauseBtn.textContent = paused ? "Resume" : "Pause";
       }
@@ -2837,12 +2855,7 @@
         if (nextBtn) nextBtn.disabled = currentActiveIndex >= performanceItems.length - 1;
       }
       function closePerformanceMode() {
-        clearInterval(intervalId);
-        isStagetimeMode = false;
-        document.body.classList.toggle("stage-lock-active", false);
-        overlay.innerHTML = "";
-        overlay.classList.add("hidden");
-        overlay.setAttribute("aria-hidden", "true");
+        closeStagetimeOverlay();
       }
       if (pauseBtn) {
         pauseBtn.addEventListener("click", function (e) {
@@ -2884,6 +2897,18 @@
       }
       applyActiveHighlight();
       syncPauseButtonLabel();
+      }
+      overlay.setAttribute("aria-hidden", "false");
+      document.body.classList.toggle("stage-lock-active", true);
+      isStagetimeMode = true;
+      overlay.classList.remove("hidden");
+      var docEl = document.documentElement;
+      if (docEl.requestFullscreen) {
+        docEl.requestFullscreen().catch(function () {});
+      } else if (docEl.webkitRequestFullscreen) {
+        docEl.webkitRequestFullscreen();
+      }
+      mountPerformanceUiAfterStart();
     } catch (err) {
       console.error("❌ Stagetime Logic Failed:", err);
     }
@@ -3380,6 +3405,16 @@
       });
   }
 
+  /** Home hub metric tiles live in index.html (.stats-container); onclick uses showPanel like bottom nav (second arg refreshes lists). */
+  function initDashboardStatBoxes() {
+    ["jokes", "ideas", "sets"].forEach(function (id) {
+      var el = document.querySelector('.stats-container [data-stat="' + id + '"]');
+      if (!el) return;
+      el.classList.add("stat-box");
+      el.setAttribute("onclick", "showPanel('" + id + "', true)");
+    });
+  }
+
   function initApp() {
     var pickerKick = document.getElementById("settings-accent-color");
     try {
@@ -3451,6 +3486,7 @@
     initJokesModalDelegation();
     initJokesFolderChrome();
     initSetsPanelDelegation();
+    initDashboardStatBoxes();
     // Default to dashboard on load.
     showPanel("panel-dashboard");
   }
