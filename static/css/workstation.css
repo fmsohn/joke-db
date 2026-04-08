@@ -441,6 +441,14 @@ body.modal-open .folder-header {
     min-height: 0;
     width: 100%;
     align-self: stretch;
+    padding-top: 70px;
+}
+
+#app-shell #panel-jokes .panel-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--bg-app);
 }
 
 #app-shell #panel-jokes .panel-body {

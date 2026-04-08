@@ -1715,7 +1715,11 @@
       rating: (function () { var r = document.getElementById("joke-edit-rating"); var v = r ? r.value : ""; return v ? parseInt(v, 10) : null; })(),
       duration: durationVal
     };
-    if (!payload.title) return;
+    if (!payload.title) {
+      showToast("Joke title is required.", "#ff0055");
+      if (titleHead && typeof titleHead.focus === "function") titleHead.focus();
+      return;
+    }
 
     var jidRaw = el.dataset.jokeId != null ? String(el.dataset.jokeId).trim() : "";
     var isNewJoke = jidRaw === "";
@@ -1804,7 +1808,9 @@
             finishNewJokeSaveUi();
           }
         })
-        .catch(function () {});
+        .catch(function () {
+          showToast("Failed to save joke. Please try again.", "#ff0055");
+        });
       return;
     }
 
@@ -1833,7 +1839,9 @@
           saveBtn.textContent = "Save";
         }, 1500);
       })
-      .catch(function () {});
+      .catch(function () {
+        showToast("Failed to save joke. Please try again.", "#ff0055");
+      });
   }
 
   /**
