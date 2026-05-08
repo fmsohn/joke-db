@@ -4,6 +4,78 @@
 * { box-sizing: border-box; }
 .hidden { display: none !important; }
 
+.nav-hidden { display: none !important; }
+
+/* --- Full-screen writing slate (focus mode) --- */
+.focus-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #050505;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.focus-overlay-actions {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.focus-overlay-actions button {
+    background: var(--slab-physics-bg);
+    border: 1px solid var(--accent-color);
+    color: var(--accent-color);
+    font-family: inherit;
+    font-weight: 800;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    padding: 10px 14px;
+    cursor: pointer;
+    border-radius: 8px;
+}
+
+.focus-textarea {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    background: transparent;
+    color: #fff;
+    border: none;
+    outline: none;
+    font-family: "Courier New", monospace;
+    font-size: 1.2rem;
+    line-height: 1.6;
+    resize: none;
+    box-sizing: border-box;
+}
+
+/* Preserve newlines in workstation readouts and main text fields */
+.idea-detail-content,
+.joke-detail-body,
+.idea-body-text,
+.idea-detail-value,
+.idea-detail-value.idea-body-text,
+#idea-focus-content,
+#idea-focus-notes,
+#joke-edit-premise,
+#joke-edit-punchline,
+#set-detail .set-bit-tile-body,
+.modal-detail-set .set-bit-tile-body,
+.detail-field-value {
+    white-space: pre-wrap;
+}
+
 /* --- Top-right command pill (fixed; visible when a folder panel is open; avoids mobile keyboard overlap). Border/glow follow accent via var(--accent-color) / --accent-rgb. --- */
 html body #nav-command-pill {
     display: none;
@@ -1661,6 +1733,34 @@ body #panel-ideas.modal-idea #idea-detail {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.modal-detail-set .set-detail-time-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    padding-top: 6px;
+    gap: 2px;
+    text-align: right;
+    white-space: normal;
+    overflow: visible;
+}
+
+.modal-detail-set .set-detail-time-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    line-height: 1.1;
+}
+
+.modal-detail-set .set-detail-time-value {
+    font-size: 1rem;
+    font-weight: 900;
+    color: var(--accent-color);
+    line-height: 1.1;
 }
 
 /* Set detail bottom ribbon: hard-lock one 1x4 action row at touch-safe height. */

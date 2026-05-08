@@ -257,6 +257,25 @@
     });
   }
 
+  /** Single-field PATCH for workstation focus mode (`dbTable`: ideas / jokes). */
+  function updateField(dbTable, recordId, fieldName, newValue) {
+    var safe = newValue != null ? String(newValue) : "";
+    var idNum = parseInt(recordId, 10);
+    if (isNaN(idNum)) return Promise.reject(new Error("Invalid record id"));
+    var t = dbTable != null ? String(dbTable).toLowerCase().trim() : "";
+    var f = fieldName != null ? String(fieldName).toLowerCase().trim() : "";
+    if (t === "ideas" || t === "idea") {
+      if (f === "content") return updateIdea(idNum, { content: safe });
+      if (f === "notes") return updateIdea(idNum, { notes: safe });
+      return Promise.reject(new Error("updateField: unsupported idea field"));
+    }
+    if (t === "jokes" || t === "joke") {
+      if (f === "content" || f === "premise") return updateJoke(idNum, { content: safe });
+      return Promise.reject(new Error("updateField: unsupported joke field"));
+    }
+    return Promise.reject(new Error("updateField: unsupported table"));
+  }
+
   function deleteIdea(id) {
     return db.ideas.get(parseInt(id, 10)).then(function (row) {
       if (!row || row.comedian_id !== COMEDIAN_ID) return false;
@@ -804,6 +823,7 @@
     getIdea: getIdea,
     addIdea: addIdea,
     updateIdea: updateIdea,
+    updateField: updateField,
     deleteIdea: deleteIdea,
     convertIdeaToJoke: convertIdeaToJoke,
 

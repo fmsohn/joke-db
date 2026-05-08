@@ -11,11 +11,11 @@
   var isDeleting = false;
 
   /** Bumped with releases; pair with index.html ASSET_VERSION + sw.js for cache/SW refresh. */
-  window.STAGETIME_APP_VERSION = "23";
+  window.STAGETIME_APP_VERSION = "25";
   window.currentJokeId = null;
   window.currentSetId = null;
-  // Cache-buster asset version: must match index.html ASSET_VERSION and ?v=... querystrings (Asset v23 / app 23).
-  var VERSION = typeof ASSET_VERSION !== "undefined" ? String(ASSET_VERSION) : "23";
+  // Cache-buster asset version: must match index.html ASSET_VERSION and ?v=... querystrings (Asset v25 / app 25).
+  var VERSION = typeof ASSET_VERSION !== "undefined" ? String(ASSET_VERSION) : "25";
   window.VERSION = VERSION;
   (function syncVersionFooter() {
     var el = document.getElementById("version-display");
@@ -1697,6 +1697,129 @@
 
   window.focusJokeBodyIfEmpty = focusJokeBodyIfEmpty;
 
+  /**
+   * Starts a timer on pointerdown; cancels on pointerup, pointerleave, pointercancel,
+   * or pointermove farther than MOVE_THRESH px from the down point.
+   */
+  function initLongPress(element, callback) {
+    if (!element || typeof callback !== "function") return;
+    var LONG_MS = 500;
+    var MOVE_THRESH = 10;
+    var timer = null;
+    var startX = 0;
+    var startY = 0;
+
+    function clearTimer() {
+      if (timer != null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    }
+
+    element.addEventListener("pointerdown", function (ev) {
+      if (ev.pointerType === "mouse" && ev.button !== 0) return;
+      clearTimer();
+      startX = ev.clientX;
+      startY = ev.clientY;
+      timer = setTimeout(function () {
+        timer = null;
+        callback();
+      }, LONG_MS);
+    });
+
+    element.addEventListener(
+      "pointermove",
+      function (ev) {
+        if (timer == null) return;
+        var dx = Math.abs(ev.clientX - startX);
+        var dy = Math.abs(ev.clientY - startY);
+        if (dx > MOVE_THRESH || dy > MOVE_THRESH) clearTimer();
+      },
+      { passive: true }
+    );
+
+    ["pointerup", "pointerleave", "pointercancel"].forEach(function (evt) {
+      element.addEventListener(evt, clearTimer);
+    });
+  }
+
+  /** Full-screen writing slate; persists via `window.dataLayer.updateField` when `recordId` is valid. */
+  window.openFocusMode = function (targetElementId, dbTable, recordId, fieldName) {
+    var target = document.getElementById(targetElementId);
+    if (!target) return;
+
+    var nav = document.getElementById("nav-command-pill");
+    if (nav) nav.classList.add("nav-hidden");
+
+    var overlay = document.createElement("div");
+    overlay.className = "focus-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+
+    var actions = document.createElement("div");
+    actions.className = "focus-overlay-actions";
+
+    var cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.textContent = "CANCEL";
+
+    var saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.textContent = "SAVE & EXIT";
+
+    var ta = document.createElement("textarea");
+    ta.className = "focus-textarea";
+    ta.setAttribute("aria-label", "Focus writing");
+    ta.value = target.value != null ? String(target.value) : "";
+
+    function restore() {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      if (nav) nav.classList.remove("nav-hidden");
+    }
+
+    cancelBtn.addEventListener("click", restore);
+
+    saveBtn.addEventListener("click", function () {
+      var newValue = ta.value != null ? String(ta.value) : "";
+      target.value = newValue;
+      var idNum = recordId != null && recordId !== "" ? parseInt(recordId, 10) : NaN;
+      if (
+        !window.dataLayer ||
+        typeof window.dataLayer.updateField !== "function" ||
+        isNaN(idNum)
+      ) {
+        restore();
+        return;
+      }
+      window.dataLayer
+        .updateField(dbTable, idNum, fieldName, newValue)
+        .then(function () {
+          return refreshCache();
+        })
+        .then(function () {
+          renderSlicer();
+          updateDashboardStats();
+          restore();
+        })
+        .catch(function () {
+          showToast("Could not save.", "#ff0055");
+          restore();
+        });
+    });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(saveBtn);
+    overlay.appendChild(actions);
+    overlay.appendChild(ta);
+    document.body.appendChild(overlay);
+    requestAnimationFrame(function () {
+      try {
+        ta.focus();
+        if (typeof ta.setSelectionRange === "function") ta.setSelectionRange(ta.value.length, ta.value.length);
+      } catch (e) {}
+    });
+  };
+
   function saveJoke(el, saveBtn) {
     var tagsInput = document.getElementById("joke-tags-input");
     var tagsVal = tagsInput ? tagsInput.value.trim() : "";
@@ -1867,6 +1990,14 @@
     var moreBtn = document.getElementById("joke-admin-toggle") || document.getElementById("joke-detail-more-btn");
     if (moreBtn) moreBtn.addEventListener("click", function () { toggleJokeAdmin(); });
 
+    var premiseLong = document.getElementById("joke-edit-premise");
+    if (premiseLong) {
+      var jidPress = el.dataset.jokeId != null ? String(el.dataset.jokeId).trim() : "";
+      initLongPress(premiseLong, function () {
+        window.openFocusMode("joke-edit-premise", "jokes", jidPress, "content");
+      });
+    }
+
     if (!skipBodyFocus) focusJokeBodyIfEmpty();
   }
 
@@ -1922,7 +2053,7 @@
         "<div class=\"joke-detail-edit-form\">" +
         "<div class=\"modal-detail-scroll-content joke-master-body\">" +
         "<div class=\"modal-form-row joke-master-field\"><p class=\"detail-label\">BODY</p>" +
-        "<textarea id=\"joke-edit-premise\" class=\"live-edit-field joke-master-textarea\" rows=\"8\"></textarea></div>" +
+        "<textarea id=\"joke-edit-premise\" class=\"live-edit-field joke-master-textarea joke-detail-body\" rows=\"8\"></textarea></div>" +
         "<div class=\"modal-form-row joke-master-field\"><p class=\"detail-label\">ACT OUT</p>" +
         "<textarea id=\"joke-edit-punchline\" class=\"live-edit-field joke-master-textarea\" rows=\"4\"></textarea></div>" +
         "</div>" +
@@ -1961,7 +2092,7 @@
         "</div>" +
         "<div class=\"joke-admin-fields-row\">" +
         "<div class=\"modal-form-row full-width-row\"><p class=\"detail-label\">Tags</p>" +
-        "<input type=\"text\" id=\"joke-tags-input\" class=\"live-edit-field joke-master-tags workstation-select\" value=\"\" autocomplete=\"off\" aria-label=\"Joke tags\"></div>" +
+        "<input type=\"text\" id=\"joke-tags-input\" class=\"live-edit-field joke-master-tags workstation-select\" value=\"\" placeholder=\"Comma-separated tags\" autocomplete=\"off\" aria-label=\"Joke tags\"></div>" +
         "</div>" +
         "<div class=\"modal-form-row\"><p class=\"detail-label\">Notes</p><textarea id=\"joke-edit-setup_notes\" class=\"live-edit-field\" rows=\"2\"></textarea></div>" +
         "</div>" +
@@ -2036,8 +2167,9 @@
         `<div class="idea-detail-header-row">` +
         `<h2 class="joke-detail-title" id="modal-idea-title">${escapeHtml(ideaTitleHeading)}</h2>` +
         `</div>` +
-        `<div class="modal-form-row"><p class="detail-label">Content</p><textarea id="idea-focus-content" class="live-edit-field" rows="7">${escapeHtml(ideaBodyStr)}</textarea></div>` +
-        `<div class="modal-form-row"><p class="detail-label">Notes</p><textarea id="idea-focus-notes" class="live-edit-field" rows="4">${escapeHtml(ideaNotesStr)}</textarea></div>` +
+        `<div class="modal-form-row"><p class="detail-label">Content</p>` +
+        `<textarea id="idea-focus-content" class="live-edit-field idea-detail-content" rows="7">${escapeHtml(ideaBodyStr)}</textarea></div>` +
+        `<div class="modal-form-row"><p class="detail-label">Notes</p><textarea id="idea-focus-notes" class="live-edit-field idea-detail-content" rows="4">${escapeHtml(ideaNotesStr)}</textarea></div>` +
         `<div class="modal-form-row"><p class="detail-label">Topic</p><select id="idea-edit-topic" class="workstation-select topic-select-global" aria-label="Idea topic"></select></div>` +
         `<div class="modal-form-row"><p class="detail-label">Tags</p><input type="text" id="idea-tags-input" class="live-edit-field workstation-select" placeholder="Comma-separated tags" value="" autocomplete="off" aria-label="Idea tags"></div>` +
         `<div class="silo-footer-actions">` +
@@ -2070,6 +2202,13 @@
       if (topicSel) {
         fillTopicSelect(topicSel, topicVal).then(function () {
           if (topicSel) topicSel.value = topicVal;
+        });
+      }
+      var ideaContentLong = document.getElementById("idea-focus-content");
+      if (ideaContentLong) {
+        var ideaIdForPress = ideaId != null && !isNaN(ideaId) ? String(ideaId) : "";
+        initLongPress(ideaContentLong, function () {
+          window.openFocusMode("idea-focus-content", "ideas", ideaIdForPress, "content");
         });
       }
     }
@@ -2940,10 +3079,12 @@
     });
     var setTimeVal = setJokes.length > 0 ? calculateSetTime(setJokes) : null;
     var setTimeStrSafe = setTimeVal != null ? String(setTimeVal) : "";
-    var setTimeMetaInner = setTimeStrSafe.trim() !== ""
-      ? ("Set time: " + escapeHtml(setTimeStrSafe))
-      : "Set time: —";
-    var setTimeMeta = "<span class=\"set-detail-time-meta meta\">" + setTimeMetaInner + "</span>";
+    var setTimeMetaValue = setTimeStrSafe.trim() !== "" ? escapeHtml(setTimeStrSafe) : "—";
+    var setTimeMeta =
+      "<div class=\"set-detail-time-meta meta set-detail-time-container\">" +
+      "<span class=\"set-detail-time-label\">Set Time:</span>" +
+      "<span class=\"set-detail-time-value\">" + setTimeMetaValue + "</span>" +
+      "</div>";
     var headerRow = "<div class=\"set-detail-header-row\">" +
       "<input type=\"text\" id=\"set-detail-name-input\" class=\"set-detail-name-input\" maxlength=\"100\" autocomplete=\"off\" aria-label=\"Set name\" value=\"" + setNameAttr + "\">" +
       setTimeMeta +
@@ -3138,7 +3279,10 @@
             });
             var nextTimeVal = jokesOnly.length > 0 ? calculateSetTime(jokesOnly) : null;
             var nextTimeStr = nextTimeVal != null ? String(nextTimeVal) : "";
-            setTimeEl.textContent = nextTimeStr.trim() !== "" ? ("Set time: " + nextTimeStr) : "Set time: —";
+            var setTimeValueEl = setTimeEl.querySelector(".set-detail-time-value");
+            if (setTimeValueEl) {
+              setTimeValueEl.textContent = nextTimeStr.trim() !== "" ? nextTimeStr : "—";
+            }
           }
 
           var removeP = dataLayer && dataLayer.removeItemFromSet
@@ -4079,8 +4223,8 @@
     var topicInput = document.getElementById("idea-edit-topic");
     var tagsInput = document.getElementById("idea-tags-input");
     var title = titleInput ? String(titleInput.textContent || "").trim() : "";
-    var content = contentInput ? String(contentInput.value || "") : "";
-    var notes = notesInput ? String(notesInput.value || "") : "";
+    var content = contentInput ? (contentInput.value != null ? String(contentInput.value) : "") : "";
+    var notes = notesInput ? (notesInput.value != null ? String(notesInput.value) : "") : "";
     var topicRaw = topicInput ? String(topicInput.value || "").trim() : "";
     var topic = topicRaw !== "" ? topicRaw : "Uncategorized";
     var tagsStr = tagsInput ? String(tagsInput.value || "").trim() : "";
